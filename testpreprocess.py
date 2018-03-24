@@ -1,7 +1,7 @@
 import preprocess as Pre
 import numpy as np
 
-s = "/Projects/Test/568/ShopFacade/"
+s = "./ShopFacade/"
 
 p = Pre.preprocess(s)
 print('number of samples created: ',p.numSamples())

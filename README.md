@@ -3,9 +3,9 @@ Application of PoseNet and dynamic structural data generation for real-time loca
 
 ## Dependencies
 1. [IP WebCam](https://play.google.com/store/apps/details?id=com.pas.webcam&hl=en) 
-2. Python 2
+2. Python 2.7
 3. OpenCV 3
-4. Keras / TensorFlow
+4. TensorFlow
 5. MatPlotlib/ NumPy/ urllib2
 
 ## Procedure
