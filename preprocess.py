@@ -57,6 +57,7 @@ class preprocess:
     def randomSample(self, num):
         i = 0
         out = np.zeros((self.height, self.width, self.depth*num), dtype=np.float)
+        labels = [[] for x in xrange(num)]
 
         if np.sum(self.ret) < num:
             raise 'all samples of dataset used'
@@ -67,12 +68,13 @@ class preprocess:
                 if self.ret[idx]==True:
                     out[:,:,i:i+3] = self.sampleImages[:,:, idx:idx+3]
                     self.ret[idx] = False
+                    labels[i] = self.labels[self.maps[self.depth*idx]]
                     i += 1
-                    print('Sample: ',i, '  |  Label: ', self.maps[self.depth*idx], '  |  Attributes: ', self.labels[self.maps[self.depth*idx]])
+                    # print('Sample: ',i, '  |  Label: ', self.maps[self.depth*idx], '  |  Attributes: ', self.labels[self.maps[self.depth*idx]])
 
         # normalize output to 0-1
         out *= 1/out.max()
-        return out
+        return out, labels
 
     def getLabels(self, location):
         print('Processing Labels...')

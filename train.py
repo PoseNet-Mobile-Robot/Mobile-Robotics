@@ -14,7 +14,7 @@ import pdb
 class trainer():
     
     def __init__(self,path_to_weight, path_to_data):
-
+        p
         self.image_inputs = tf.placeholder(tf.float32, [None, 224, 224, 3])
         self.label_inputs = tf.placeholder(tf.float32, [None, 7])
         self.network = vgg.VGG16({'data': self.image_inputs})
