@@ -1,3 +1,7 @@
+import sys
+
+sys.path.insert(0, '/home/eecs568/miniconda3/envs/tensorflow/lib/python3.5/site-packages')
+            
 import numpy as np
 import random
 import tensorflow as tf
@@ -8,7 +12,9 @@ import vgg
 import pdb
 
 class trainer():
+    
     def __init__(self,path_to_weight, path_to_data):
+
         self.image_inputs = tf.placeholder(tf.float32, [None, 224, 224, 3])
         self.label_inputs = tf.placeholder(tf.float32, [None, 7])
         self.network = vgg.VGG16({'data': self.image_inputs})
@@ -20,9 +26,8 @@ class trainer():
 
         self.load_weight(path_to_weight)
         self.merged_summary = tf.summary.merge_all()
-        self.train_writer = tf.summary.FileWriter(FLAGS.summaries_dir + '/train',
-                                     sess.graph)
-        self.test_writer = tf.summary.FileWriter(FLAGS.summaries_dir + '/test')        )
+        self.train_writer = tf.summary.FileWriter('./summary/train', self.sess.graph)
+        self.test_writer = tf.summary.FileWriter( './summary/test') 
         
         self.init_op = tf.global_variables_initializer()
 
