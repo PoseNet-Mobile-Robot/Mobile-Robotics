@@ -53,29 +53,6 @@ class preprocess:
                 self.sampleImages[:, :, idx:idx+3] = img[x:x+self.height, y:y+self.width,:].copy()
                 idx += 3
 
-
-    def randomSample(self, num):
-        i = 0
-        out = np.zeros((self.height, self.width, self.depth*num), dtype=np.float)
-        labels = [[] for x in xrange(num)]
-
-        if np.sum(self.ret) < num:
-            raise 'all samples of dataset used'
-            exit(0)
-        else:
-            while i<num:
-                idx = randint(0,self.numsamples-1)
-                if self.ret[idx]==True:
-                    out[:,:,i:i+3] = self.sampleImages[:,:, idx:idx+3]
-                    self.ret[idx] = False
-                    labels[i] = self.labels[self.maps[self.depth*idx]]
-                    i += 1
-                    # print('Sample: ',i, '  |  Label: ', self.maps[self.depth*idx], '  |  Attributes: ', self.labels[self.maps[self.depth*idx]])
-
-        # normalize output to 0-1
-        out *= 1/out.max()
-        return out, labels
-
     def getLabels(self, location):
         print('Processing Labels...')
 
@@ -89,3 +66,26 @@ class preprocess:
             # extract just the name of the file
             name = line[0][5:]
             self.labels[name] = list(map(float,line[1:8]))
+
+    def randomSample(self, num):
+        i = 0
+        out = np.zeros((num, self.height, self.width, self.depth), dtype=np.float)
+        labels = [[] for x in xrange(num)]
+
+        if np.sum(self.ret) < num:
+            raise 'all samples of dataset used'
+            exit(0)
+        else:
+            while i<num:
+                idx = randint(0,self.numsamples-1)
+                if self.ret[idx]==True:
+                    out[i,:,:,:] = self.sampleImages[:,:, idx:idx+3]
+                    self.ret[idx] = False
+                    labels[i] = self.labels[self.maps[self.depth*idx]]
+                    i += 1
+                    # print('Sample: ',i, '  |  Label: ', self.maps[self.depth*idx], '  |  Attributes: ', self.labels[self.maps[self.depth*idx]])
+
+        # normalize output to 0-1
+        out *= 1/out.max()
+        return out, labels
+
