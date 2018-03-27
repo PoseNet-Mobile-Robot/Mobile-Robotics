@@ -87,5 +87,5 @@ class preprocess:
 
         # normalize output to 0-1
         out *= 1/out.max()
-        return out, labels
+        return out, np.array(labels)
 
