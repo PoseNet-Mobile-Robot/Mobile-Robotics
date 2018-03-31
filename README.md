@@ -1,12 +1,8 @@
-# Deep Learning in SLAM
-Application of PoseNet and dynamic structural data generation for real-time localization
+# GTSAM with PosenetFactor
+
 
 ## Dependencies
-1. [IP WebCam](https://play.google.com/store/apps/details?id=com.pas.webcam&hl=en) 
-2. Python 2
-3. OpenCV 3
-4. Keras / TensorFlow
-5. MatPlotlib/ NumPy/ urllib2
+1. GTSAM 4.0 
 
 ## Procedure
 1. Install IP WebCam on your phone
