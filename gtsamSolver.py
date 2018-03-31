@@ -51,7 +51,7 @@ class PoseNetiSam(object):
 
     def step(self, odometry, odometryNoise):
         odometryGT = gtsam.Pose2(odometry[0],odometry[1],odometry[2])
-        odometryNoise = gtsam.noiseModel.Diagonal.Sigmas(np.array(odometryNoise))
+        odometryNoise = gtsam.noiseModel.Diagonal.Variances(np.array(odometryNoise))
         self.graph.add(gtsam.BetweenFactorPose2(X(self.currentKey), X(self.currentKey+1),
                                                 odometryGT, odometryNoise))
 
@@ -67,7 +67,7 @@ class PoseNetiSam(object):
 
     def addObs(self, measurement, measurementNoise):
         measurement = gtsam.Pose2(measurement[0],measurement[1],measurement[2])
-        measurementNoise = gtsam.noiseModel.Diagonal.Sigmas(np.array(measurementNoise))
+        measurementNoise = gtsam.noiseModel.Diagonal.Variances(np.array(measurementNoise))
         self.graph.add(gtsam.PriorFactorPose2(X(self.currentKey), measurement, measurementNoise))
 
         return
