@@ -99,3 +99,5 @@ class preprocess:
         out *= 1/out.max()
         return out, np.array(labels)
 
+    def reset(self):
+        self.ret = np.ones((self.numsamples), dtype = bool)
