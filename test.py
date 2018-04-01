@@ -1,4 +1,5 @@
 import data_handler as DH
+import sys
 import numpy as np
 
 '''
@@ -12,8 +13,9 @@ numsamples() = prints total number of samples generated from selected images
 remimages() = prints total number of images that remain in the directory
 remsamples() = prints total number of samples that remain from the selected lot of images
 '''
+print(sys.version)
 
-location = "./ShopFacade/"
+location = "../ShopFacade/"
 
 dh = DH.Process(location)
 
