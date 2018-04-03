@@ -1,7 +1,7 @@
 import sys, os
-
 sys.path.insert(0, '/home/eecs568/miniconda3/envs/tensorflow/lib/python3.5/site-packages')
-import preprocess            
+import preprocess
+from datetime import datetime
 import numpy as np
 import random
 import tensorflow as tf
@@ -43,8 +43,9 @@ class trainer():
             self.saver = tf.train.Saver()
             
         self.merged_summary = tf.summary.merge_all()
-        self.train_writer = tf.summary.FileWriter('./summary/train', self.sess.graph)
-        self.test_writer = tf.summary.FileWriter( './summary/test') 
+        now = datetime.now()
+        self.train_writer = tf.summary.FileWriter('./summary/train'+ now.strftime("%Y%m%d-%H%M%S") + "/", self.sess.graph)
+        self.test_writer = tf.summary.FileWriter( './summary/test'+ now.strftime("%Y%m%d-%H%M%S") + "/") 
 
         # initialize 
         self.init_data_handler(path_to_data)        
@@ -72,6 +73,7 @@ class trainer():
 
             feed_in, dim = (fc_out, input_shape[-1].value)
             weights = tf.get_variable('weights', [dim, 7])
+            self.network.variable_summaries( weights,  "_weights_fc" )
             biases =  tf.get_variable('biases', [7])
             self.init_vars = [weights, biases]
 
@@ -79,7 +81,7 @@ class trainer():
             fc8 = op(feed_in, weights, biases, name=scope.name)
         self.regression_out = fc8
         tf.identity(self.regression_out, name="regression_output")
-        self.variable_summaries(self.regression_out, "regression_output_")
+        self.network.variable_summaries(self.regression_out, "regression_output_")
 
     def restore_network(self, path_to_weight):
         
@@ -91,7 +93,7 @@ class trainer():
         self.saver.restore(self.sess, tf.train.latest_checkpoint('./'))
         print("Model restored.")
         
-    def build_loss(self, beta=1):
+    def build_loss(self, beta=300):
         self.translation_loss = tf.nn.l2_loss(self.regression_out[0:2] - self.label_inputs[0:2])
         self.rotation_loss = tf.nn.l2_loss( self.regression_out[3:6]/tf.norm(self.regression_out[3:6]) - self.label_inputs[3:6]  )
         self.loss = self.translation_loss + beta * self.rotation_loss
@@ -102,25 +104,24 @@ class trainer():
         for v in tf.trainable_variables():
             for i in slot_var_names:
                 self.init_vars.append(self.optimizer.get_slot(v, i))
-        self.train_op = self.optimizer.minimize(self.loss,  name='Adam_minimizer')
-
-        self.variable_summaries(self.translation_loss, "translation_loss_")
-        self.variable_summaries(self.rotation_loss, "rotation_loss_")
-        self.variable_summaries(self.loss, "final_weighted_loss_")
+        self.compute_gradients = self.optimizer.compute_gradients (self.loss ) #, tf.trainable_variables())
+        self.train_op = self.optimizer.apply_gradients(self.compute_gradients , name='Adam_apply_gradients')
+        #self.train_op = self.optimizer.minimize(self.loss,  name='Adam_minimizer')
+        self.network.variable_summaries(self.translation_loss, "translation_loss_")
+        self.network.variable_summaries(self.rotation_loss, "rotation_loss_")
+        self.network.variable_summaries(self.loss, "final_weighted_loss_")
 
     # TODO: for each layer's weight && bias, add summaries
-    def variable_summaries(self, var, var_name):
-        """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
-        with tf.name_scope( var_name + '_summaries'):
-            mean = tf.reduce_mean(var)
-            tf.summary.scalar('mean', mean)
-        with tf.name_scope(var_name+'_stddev'):
-            stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
-            tf.summary.scalar('stddev', stddev)
-        tf.summary.scalar('max_'+var_name, tf.reduce_max(var))
-        tf.summary.scalar('min_'+var_name, tf.reduce_min(var))
-        tf.summary.histogram('histogram_'+var_name, var)
+    def plot_gradients_each_layer(self, gradients, train_summary):
+        for g, v in gradients:
+            if g is not None:
+                grad_hist_summary = tf.summary.histogram("{}/grad_histogram".format(v.name), g)
+                sparsity_summary = tf.summary.scalar("{}/grad/sparsity".format(v.name), tf.nn.zero_fraction(g))
+                train_summary.append(grad_hist_summary)
+                train_summary.append(sparsity_summary)
+                tf.summary.merge(train_summary)
 
+    
     def test(self, img, num_random_crops=10):
         if img.shape[2] != 3:
             print ("We only accept 3-dimensional rgb images")
@@ -149,8 +150,14 @@ class trainer():
         for epoch in range(epochs):
             for i in range(total_batch):
                 one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
-                summary, loss, _ = self.sess.run([self.merged_summary, self.loss, self.train_op], 
-                                feed_dict={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label })
+                #summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], 
+                #                feed_dict={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label })
+
+                #self.sess.run([self.optimizer.apply_gradients], feed_dict={gradients})
+                feeds ={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label }
+                pdb.set_trace()
+                summary, loss,grad,  _ = self.sess.run([self.merged_summary, self.loss, self.compute_gradients, self.train_op], feeds)
+                self.plot_gradients_each_layer( grad, summary )
                 print("[Epoch "+str(epoch)+" trainer] Train one batch of size "+str(batch_size)+", loss is "+str(loss))
                 total_loss += loss
                 self.train_writer.add_summary(summary, epoch * total_batch + i)

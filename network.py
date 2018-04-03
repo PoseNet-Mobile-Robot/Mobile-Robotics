@@ -52,6 +52,19 @@ class Network(object):
         '''Construct the network. '''
         raise NotImplementedError('Must be implemented by the subclass.')
 
+    def variable_summaries(self, var, var_name):
+        """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
+        with tf.name_scope( var_name + '_summaries'):
+            mean = tf.reduce_mean(var)
+            tf.summary.scalar('_mean', mean)
+        with tf.name_scope(var_name+'_stddev'):
+            stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+            tf.summary.scalar('_stddev', stddev)
+        tf.summary.scalar('max_'+var_name, tf.reduce_max(var))
+        tf.summary.scalar('min_'+var_name, tf.reduce_min(var))
+        tf.summary.histogram('histogram_'+var_name, var)
+
+    
     def load(self, data_path, session, ignore_missing=False):
         '''Load network weights.
         data_path: The path to the numpy-serialized network weights
@@ -127,6 +140,7 @@ class Network(object):
         convolve = lambda i, k: tf.nn.conv2d(i, k, [1, s_h, s_w, 1], padding=padding)
         with tf.variable_scope(name) as scope:
             kernel = self.make_var('weights', shape=[k_h, k_w, c_i / group, c_o])
+            self.variable_summaries( kernel, name + "_weights_conv" )
             if group == 1:
                 # This is the common-case. Convolve the input without any further complications.
                 output = convolve(input, kernel)
@@ -198,6 +212,7 @@ class Network(object):
             else:
                 feed_in, dim = (input, input_shape[-1].value)
             weights = self.make_var('weights', shape=[dim, num_out])
+            self.variable_summaries(weights, name + "_weights_fc" )
             biases = self.make_var('biases', [num_out])
             op = tf.nn.relu_layer if relu else tf.nn.xw_plus_b
             fc = op(feed_in, weights, biases, name=scope.name)

@@ -2,12 +2,12 @@ import cv2
 import sys, os
 from random import randint, sample
 import numpy as np
-
+import pdb
 class preprocess:
     def __init__(self, location, height = 224, width = 224, depth = 3):
         self.labels = dict()    # dictionary between labels and quaternions
         self.maps = dict()   # dicitonary between labels and ID
-        self.location = location + 'seq1/'
+        self.location = location + 'seq2/' # BUG!! plz read dataset_train.txt/dataset_test.txt as the imgs come from differetn locations
         self.dirElem = os.listdir(self.location)
         self.lenDir = len(self.dirElem)
         self.height = height
@@ -41,8 +41,17 @@ class preprocess:
         idx = 0
         for i in xrange(self.lenDir):
             elems[i] = self.location + self.dirElem[i]
-            img = cv2.resize(cv2.imread(elems[i],1), (455,256), interpolation=cv2.INTER_CUBIC)
+            img = cv2.resize(cv2.imread(elems[i],1).astype(float), (455,256), interpolation=cv2.INTER_CUBIC)
             [h, w, d] = img.shape   # (256, 455, 3)
+            
+            # normalize output to mean 0, variance 1
+            mean_img = np.mean(img, axis=0)
+            mean_img = np.mean(mean_img, axis=0)
+            std_img = np.zeros(d)
+            for i in range(d):
+                img[:,:,i] -= mean_img[i]
+                std_img[i] = np.std(img[:,:,i])
+                img[:,:,i] /= std_img[i]
 
             # height random crop range = 0-31
             # width random crop range = 0-230
@@ -56,7 +65,7 @@ class preprocess:
     def getLabels(self, location):
         print('Processing Labels...')
 
-        f = open(location+'dataset_test.txt')
+        f = open(location+'dataset_train.txt')
         lines = f.readlines()
         numLines = len(lines)
 
@@ -81,13 +90,12 @@ class preprocess:
                 if self.ret[idx]==True:
                     out[i,:,:,:] = self.sampleImages[:,:, idx:idx+3]
                     self.ret[idx] = False
-                    labels[i] = self.labels[self.maps[self.depth*idx]]
+                    # pdb.set_trace()
+                    labels[i] = self.labels[self.maps[self.depth*idx]]  # BUG? Does this self.maps[self.depth*idx] always provides the same result? I test on datase_train.txt, then self.maps[0] == self.maps[3] == self.maps[6] == ...
+                    # pdb.set_trace()
                     i += 1
                     # print('Sample: ',i, '  |  Label: ', self.maps[self.depth*idx], '  |  Attributes: ', self.labels[self.maps[self.depth*idx]])
 
-        # normalize output to 0-1
-        out *= 1/out.max()
-        return out, np.array(labels)
 
     def reset(self):
         self.ret = np.ones((self.numsamples), dtype = bool)

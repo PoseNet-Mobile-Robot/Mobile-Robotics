@@ -1,6 +1,9 @@
 import network
 
 class VGG16(network.Network):
+    def variable_summaries(self, var, var_name):
+         super(VGG16, self).variable_summaries(var, var_name)
+         
     def setup(self):
         (self.feed('data')
              .conv(3, 3, 64, 1, 1, name='conv1_1')
