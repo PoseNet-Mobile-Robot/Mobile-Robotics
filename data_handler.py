@@ -127,9 +127,16 @@ class Process:
                 if self.remSamples[idx]==True:
                     self.remSamples[idx] = False
 
-                    # normalize image to be in 0-1 range
+                    # gaussian normalization of image to have mean 0, variance 1
                     temp = self.sampleImages[idx, :, :, :].astype(float)
-                    temp *= 1/temp.max()
+                    temp_mean = np.mean(temp, axis=0)
+                    temp_mean = np.mean(temp_mean, axis=0)
+                    temp_std = np.zeros(self.depth)
+
+                    for i in range(self.depth):
+                        temp[:,:,i] -= temp_mean[i]
+                        temp_std[i] = np.std(temp[:,:,i])
+                        temp[:,:,i] /= temp_std[i]
 
                     # assign sample and labels
                     samples[ctr,:,:,:] = temp
