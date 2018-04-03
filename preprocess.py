@@ -23,16 +23,6 @@ class preprocess:
         # store all labels in a dictionary
         self.getLabels(location)
 
-    def reset(self):
-        self.sampleImages = np.zeros((self.height, self.width, self.depth*self.numsamples), dtype=np.uint8)
-        self.ret = np.ones((self.numsamples), dtype = bool)
-        # read all images in directory and store in np array
-        self.process()
-        # store all labels in a dictionary
-        self.getLabels(location)
-
-
-        
     def numSamples(self):
         return self.numsamples
 
