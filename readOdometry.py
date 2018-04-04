@@ -6,7 +6,7 @@ class odometry(object):
     '''
     odometry is a class that read and distribute odometries
     '''
-    def __init__(self, filepath, numEntries = None):
+    def __init__(self, filepath, startId=None, endId=None):
 
         mu_path = os.path.join(filepath,'odometry_mu.csv')
         cov_path = os.path.join(filepath,'odometry_cov.csv')
@@ -15,19 +15,20 @@ class odometry(object):
         # reading the timestamps from the file for synchronize with sensor
         self.timestamps = odom[:,0]-odom[0,0]
 
-        if numEntries == None:
-            numEntries = len(odom)
+        if startId == None:
+            startId = 0
+            endId = len(odom)
 
         # reading odometry mu (delta_x,delta_y,delta_theta)
-        x = odom[:numEntries, 1]
-        y = odom[:numEntries, 2]
-        theta = odom[:numEntries, 6]
+        x = odom[startId:endId, 1]
+        y = odom[startId:endId, 2]
+        theta = odom[startId:endId, 6]
         self.odom = np.transpose(np.array([x,y,theta]))
 
         # reading the covariance matrix
         odomCov = np.loadtxt(cov_path, delimiter=",")
 
-        self.odomCov = np.transpose(np.array([odomCov[:numEntries,1], odomCov[:numEntries,7], odomCov[:numEntries,21]]))
+        self.odomCov = np.transpose(np.array([odomCov[startId:endId,1], odomCov[startId:endId,7], odomCov[startId:endId,21]]))
 
         # current reading index
         self.readingId = 0
@@ -36,6 +37,9 @@ class odometry(object):
         # when getting new odometry the reading id will increment
         if readingId == None:
             readingId = self.readingId
+
+        ## accumulate the odometry if reading is not continuous
+        ## if the file is set to correspond with the image file then ommit this comment
 
         self.readingId += 1
 
