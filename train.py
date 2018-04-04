@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, '/home/eecs568/miniconda3/envs/tensorflow/lib/python3.5/site-packages')
-import preprocess
+import data_handler
 from datetime import datetime
 import numpy as np
 import random
@@ -57,7 +57,8 @@ class trainer():
             print("Model initialized")
 
     def init_data_handler(self,path_to_data):
-        self.data_handler = preprocess.preprocess(path_to_data)
+        self.data_handler = data_handler.Process(path_to_data)
+
 
     def load_weight(self,path_to_weight):
         self.network.load(path_to_weight, self.sess)
@@ -104,9 +105,9 @@ class trainer():
         for v in tf.trainable_variables():
             for i in slot_var_names:
                 self.init_vars.append(self.optimizer.get_slot(v, i))
-        self.compute_gradients = self.optimizer.compute_gradients (self.loss ) #, tf.trainable_variables())
-        self.train_op = self.optimizer.apply_gradients(self.compute_gradients , name='Adam_apply_gradients')
-        #self.train_op = self.optimizer.minimize(self.loss,  name='Adam_minimizer')
+        #self.compute_gradients = self.optimizer.compute_gradients (self.loss, tf.trainable_variables())
+        #self.train_op = self.optimizer.apply_gradients(self.compute_gradients , name='Adam_apply_gradients')
+        self.train_op = self.optimizer.minimize(self.loss,  name='Adam_minimizer')
         self.network.variable_summaries(self.translation_loss, "translation_loss_")
         self.network.variable_summaries(self.rotation_loss, "rotation_loss_")
         self.network.variable_summaries(self.loss, "final_weighted_loss_")
@@ -140,24 +141,39 @@ class trainer():
         t_r_output = self.sess.run([self.regression_out],
                                    feed_dict={self.image_inputs: input_batch})
         return np.mean(t_r_output, axis=0)
+
+    
     
     def train(self, batch_size, epochs):
+        
         total_loss = 0
-        total_batch = int(self.data_handler.numSamples() / batch_size)
-        print("[trainer] Start Training, size of dataset is "+str(self.data_handler.numSamples()))
-        #pdb.set_trace()
-            
+        num_crops_per_img = 128
+        pdb.set_trace()
+        total_batch = int(self.data_handler.numimages() * num_crops_per_img / batch_size)        
+        print("[trainer] Start Training, size of dataset is "+str(self.data_handler.numimages() * num_crops_per_img ))
+        
         for epoch in range(epochs):
+            self.data_handler.reset()
+            self.data_handler.generateData(500)
             for i in range(total_batch):
-                one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
+                data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
+                if data_runout_flag == False:
+                    if self.data_handler.remimages() > 0:
+                        self.data_handler.generateData(500)
+                    else:
+                        self.data_handler.reset()
+                        self.data_handler.generateData(500)
+                    data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
+
                 #summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], 
                 #                feed_dict={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label })
 
                 #self.sess.run([self.optimizer.apply_gradients], feed_dict={gradients})
+                
                 feeds ={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label }
-                pdb.set_trace()
-                summary, loss,grad,  _ = self.sess.run([self.merged_summary, self.loss, self.compute_gradients, self.train_op], feeds)
-                self.plot_gradients_each_layer( grad, summary )
+                # summary, loss,grad,  _ = self.sess.run([self.merged_summary, self.loss, self.compute_gradients, self.train_op], feeds)
+                summary, loss,  _ = self.sess.run([self.merged_summary, self.loss, self.train_op], feeds)
+                # self.plot_gradients_each_layer( grad, summary )
                 print("[Epoch "+str(epoch)+" trainer] Train one batch of size "+str(batch_size)+", loss is "+str(loss))
                 total_loss += loss
                 self.train_writer.add_summary(summary, epoch * total_batch + i)
@@ -171,11 +187,12 @@ class trainer():
 
 if __name__ == "__main__":
     argv = sys.argv
+    pdb.set_trace()
     if len(sys.argv) < 4:
         argv = ['', '', '', '']
         argv[1] = './vgg.data'
         argv[2] = './ShopFacade/'
         argv[3] = bool(int(False))
-    
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'     
     train_thread = trainer(argv[1], argv[2], bool(int(argv[3])))
-    train_thread.train(50, 600)
+    train_thread.train(32, 600)
