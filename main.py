@@ -56,6 +56,7 @@ def main(pathOdom_,pathImage_,pathWeight_):
     for i in range(iterations):
 
         # adding odometry
+        # TODO: matching the frequency with the sensor measurement, for loop is needed
         iSam.step(odom.getOdometry(startId))
 
         # getting measurement
