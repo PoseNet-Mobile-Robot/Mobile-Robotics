@@ -8,14 +8,14 @@ import tensorflow as tf
 from tqdm import tqdm
 import cv2, imutils
 import vgg
-#import data
+import gen_data
 import pdb
 
 def delete_network_backups(filename_prefix):
     try:
         os.remove(filename_prefix+str(".index"))
     except OSError:
-        print OSError
+        print(OSError)
         pass
     try:
         os.remove(filename_prefix+str(".meta"))
@@ -44,6 +44,7 @@ class trainer():
             
         self.merged_summary = tf.summary.merge_all()
         now = datetime.now()
+        #self.train_writer = tf.summary.FileWriter('./summary/train/', self.sess.graph)
         self.train_writer = tf.summary.FileWriter('./summary/train'+ now.strftime("%Y%m%d-%H%M%S") + "/", self.sess.graph)
         self.test_writer = tf.summary.FileWriter( './summary/test'+ now.strftime("%Y%m%d-%H%M%S") + "/") 
 
@@ -57,8 +58,8 @@ class trainer():
             print("Model initialized")
 
     def init_data_handler(self,path_to_data):
-        self.data_handler = data_handler.Process(path_to_data)
-
+        #self.data_handler = data_handler.Process(path_to_data)
+        self.data_handler = gen_data.get_data()
 
     def load_weight(self,path_to_weight):
         self.network.load(path_to_weight, self.sess)
@@ -67,20 +68,29 @@ class trainer():
 
     def regen_regression_network(self):
         graph = tf.get_default_graph()
-        fc_out = graph.get_tensor_by_name("fc7/fc7:0")
+        fc7 = graph.get_tensor_by_name("fc7/fc7:0")
 
         with tf.variable_scope("fc8", reuse=tf.AUTO_REUSE) as scope:
-            input_shape = fc_out.get_shape()
-
-            feed_in, dim = (fc_out, input_shape[-1].value)
-            weights = tf.get_variable('weights', [dim, 7])
-            self.network.variable_summaries( weights,  "_weights_fc" )
-            biases =  tf.get_variable('biases', [7])
-            self.init_vars = [weights, biases]
-
+            fc8_input_shape = fc7.get_shape()
+            feed_in, dim = (fc7, fc8_input_shape[-1].value)
+            fc8_weights = tf.get_variable('weights', [dim, 2048])
+            self.network.variable_summaries( fc8_weights,  "_weights_fc" )
+            fc8_biases =  tf.get_variable('biases', [2048])
             op = tf.nn.xw_plus_b
-            fc8 = op(feed_in, weights, biases, name=scope.name)
-        self.regression_out = fc8
+            fc8 = op(feed_in, fc8_weights, fc8_biases, name=scope.name)
+
+        with tf.variable_scope("fc9", reuse=tf.AUTO_REUSE) as scope:
+            fc9_input_shape = fc8.get_shape()
+
+            feed_in, dim = (fc8, fc9_input_shape[-1].value)
+            fc9_weights = tf.get_variable('weights', [dim, 7])
+            self.network.variable_summaries( fc9_weights,  "_weights_fc" )
+            fc9_biases =  tf.get_variable('biases', [7])
+            op = tf.nn.xw_plus_b
+            fc9 = op(feed_in, fc9_weights, fc9_biases, name=scope.name)
+        self.init_vars = [fc8_weights, fc8_biases , fc9_weights,  fc9_biases]
+        self.regression_out = fc9
+        
         tf.identity(self.regression_out, name="regression_output")
         self.network.variable_summaries(self.regression_out, "regression_output_")
 
@@ -94,35 +104,29 @@ class trainer():
         self.saver.restore(self.sess, tf.train.latest_checkpoint('./'))
         print("Model restored.")
         
-    def build_loss(self, beta=300):
-        self.translation_loss = tf.nn.l2_loss(self.regression_out[0:2] - self.label_inputs[0:2])
-        self.rotation_loss = tf.nn.l2_loss( self.regression_out[3:6]/tf.norm(self.regression_out[3:6]) - self.label_inputs[3:6]  )
+    def build_loss(self, beta=100):
+        self.translation_loss = tf.sqrt(tf.nn.l2_loss(self.regression_out[0:3] - self.label_inputs[0:3]))
+        self.rotation_loss = tf.sqrt(tf.nn.l2_loss( self.regression_out[3:7] - self.label_inputs[3:7]  ))
+        #self.rotation_loss = tf.sqrt(tf.nn.l2_loss( self.regression_out[3:7]/tf.norm(self.regression_out[3:7]) - self.label_inputs[3:7]  ))
         self.loss = self.translation_loss + beta * self.rotation_loss
         tf.identity(self.loss, name="final_loss")
 
-        self.optimizer = tf.train.AdamOptimizer( learning_rate=0.0001, beta1=0.9, beta2=0.999, epsilon=0.00000001, use_locking=False)
+        self.optimizer = tf.train.AdamOptimizer( learning_rate=0.00001, beta1=0.9, beta2=0.999, epsilon=0.00000001, use_locking=False)
         slot_var_names = self.optimizer.get_slot_names()
         for v in tf.trainable_variables():
             for i in slot_var_names:
                 self.init_vars.append(self.optimizer.get_slot(v, i))
-        #self.compute_gradients = self.optimizer.compute_gradients (self.loss, tf.trainable_variables())
-        #self.train_op = self.optimizer.apply_gradients(self.compute_gradients , name='Adam_apply_gradients')
-        self.train_op = self.optimizer.minimize(self.loss,  name='Adam_minimizer')
+        train_vars = tf.trainable_variables()
+        del train_vars[-6]
+        del train_vars[-5]
+        self.compute_gradients = self.optimizer.compute_gradients (self.loss, train_vars)
+        self.train_op = self.optimizer.apply_gradients(self.compute_gradients , name='Adam_minimizer')
+        #self.train_op = self.optimizer.minimize(self.loss,  name='Adam_minimizer')
+        grad_summ_op = tf.summary.merge([tf.summary.histogram("%s_grad" % g[1].name, g[0]) for g in self.compute_gradients ])
         self.network.variable_summaries(self.translation_loss, "translation_loss_")
         self.network.variable_summaries(self.rotation_loss, "rotation_loss_")
         self.network.variable_summaries(self.loss, "final_weighted_loss_")
 
-    # TODO: for each layer's weight && bias, add summaries
-    def plot_gradients_each_layer(self, gradients, train_summary):
-        for g, v in gradients:
-            if g is not None:
-                grad_hist_summary = tf.summary.histogram("{}/grad_histogram".format(v.name), g)
-                sparsity_summary = tf.summary.scalar("{}/grad/sparsity".format(v.name), tf.nn.zero_fraction(g))
-                train_summary.append(grad_hist_summary)
-                train_summary.append(sparsity_summary)
-                tf.summary.merge(train_summary)
-
-    
     def test(self, img, num_random_crops=10):
         if img.shape[2] != 3:
             print ("We only accept 3-dimensional rgb images")
@@ -148,14 +152,15 @@ class trainer():
         
         total_loss = 0
         num_crops_per_img = 128
+        total_batch = 100#int(self.data_handler.numimages() * num_crops_per_img / batch_size)        
+        #print("[trainer] Start Training, size of dataset is " + str(334/32)) #+str(self.data_handler.numimages() * num_crops_per_img ))
         pdb.set_trace()
-        total_batch = int(self.data_handler.numimages() * num_crops_per_img / batch_size)        
-        print("[trainer] Start Training, size of dataset is "+str(self.data_handler.numimages() * num_crops_per_img ))
-        
         for epoch in range(epochs):
-            self.data_handler.reset()
-            self.data_handler.generateData(500)
+            #self.data_handler.reset()
+            #self.data_handler.generateData(500)
+            data_gen = gen_data.gen_data_batch(self.data_handler )
             for i in range(total_batch):
+                '''
                 data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
                 if data_runout_flag == False:
                     if self.data_handler.remimages() > 0:
@@ -164,35 +169,32 @@ class trainer():
                         self.data_handler.reset()
                         self.data_handler.generateData(500)
                     data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
-
-                #summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], 
-                #                feed_dict={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label })
-
-                #self.sess.run([self.optimizer.apply_gradients], feed_dict={gradients})
-                
+                '''
+                one_batch_image, np_poses_x, np_poses_q = next(data_gen)
+                one_batch_label = np.hstack((np_poses_x, np_poses_q))
                 feeds ={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label }
-                # summary, loss,grad,  _ = self.sess.run([self.merged_summary, self.loss, self.compute_gradients, self.train_op], feeds)
-                summary, loss,  _ = self.sess.run([self.merged_summary, self.loss, self.train_op], feeds)
-                # self.plot_gradients_each_layer( grad, summary )
+                summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], feed_dict=feeds) 
+                self.sess.run([self.train_op], feed_dict=feeds )
                 print("[Epoch "+str(epoch)+" trainer] Train one batch of size "+str(batch_size)+", loss is "+str(loss))
                 total_loss += loss
                 self.train_writer.add_summary(summary, epoch * total_batch + i)
+                
             avg_loss = (total_loss)/total_batch
             self.saver.save(self.sess, "./model_epoch_"+str(epoch)+".ckpt")
             if epoch > 0: delete_network_backups("./model_epoch_"+str(epoch-1)+".ckpt" )
             print("[trainer] Epoch " + str(epoch )+ " ends, avg loss =" + "{:.3f}".format(avg_loss))
-            self.data_handler.reset()
+
             total_loss = 0
         
 
 if __name__ == "__main__":
     argv = sys.argv
-    pdb.set_trace()
+    tf.logging.set_verbosity(tf.logging.ERROR)
     if len(sys.argv) < 4:
         argv = ['', '', '', '']
         argv[1] = './vgg.data'
         argv[2] = './ShopFacade/'
         argv[3] = bool(int(False))
-    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'     
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
     train_thread = trainer(argv[1], argv[2], bool(int(argv[3])))
     train_thread.train(32, 600)
