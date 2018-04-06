@@ -181,6 +181,7 @@ class Process:
 
         for i in range(length):
             name = int(odom[i, 0].item()/10**param)
+
             x = float(odom[i, 1])
             y = float(odom[i, 2])
             z = float(odom[i, 3])
