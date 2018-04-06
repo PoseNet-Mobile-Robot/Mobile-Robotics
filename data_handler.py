@@ -21,7 +21,7 @@ class Process:
     remsamples() = prints total number of samples that remain from the selected lot of images
     '''
 
-    def __init__(self, location, height = 224, width = 224, depth = 3):
+    def __init__(self, location, file = None, flag = False, height = 224, width = 224, depth = 3):
         self.img2labels = dict()
         self.idx2img = dict()
 
@@ -37,17 +37,24 @@ class Process:
         self.remImages = []
         self.remSamples = []
 
+        # flag for processing data from NCLT / Cambridge
+        self.flag = flag
+        self.file = file
         # OS Walk for getting all image files
         self.OSWalk()
         # print number of images
         self.numimages()
-        # populate labels dict
-        self.getLabels()
 
+        # populate labels dict
+        # False implies Cambridge Dataset, True is NCLT
+        if self.flag == False:
+            self.getLabels()
+        else:
+            self.getGround()
 
     def OSWalk(self):
         images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location)
-             for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif"))]
+             for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
         self.imageLocs = images
 
         for i in range(len(images)):
@@ -57,8 +64,6 @@ class Process:
         # array to store which image has been used
         self.numImages = len(self.imageLocs)
         self.remImages = np.ones((self.numImages), dtype = bool)
-
-
 
     def generateData(self, num):
         ctr = 0
@@ -86,8 +91,6 @@ class Process:
         # generate samples
         self.process(num, indices)
 
-
-
     def process(self, num, indices):
         print('Generating Samples .... ')
 
@@ -98,6 +101,12 @@ class Process:
             # read image
             img = cv2.resize(cv2.imread(indices[i], 1), (455,256), interpolation = cv2.INTER_CUBIC)
             name = self.getName(indices[i])
+
+            # rotate image if NCLT
+            if self.flag==True:
+                rows, cols, _ = img.shape
+                M = cv2.getRotationMatrix2D((cols/2,rows/2),90,1)
+                img = cv2.warpAffine(img,M,(cols,rows))
 
             # generate 128 random indices for crop
             for j in range(idx, idx+128):
@@ -162,16 +171,37 @@ class Process:
             line = line.split()
             self.img2labels[line[0]] = list(map(float,line[1:8]))
 
+    def getGround(self):
+        filename = self.location + self.file
+        odom = np.loadtxt(filename, delimiter = ",")
+        length, _ = odom.shape
 
+        # the number we have to divide by to get a correct association
+        param = 4
+
+        for i in range(length):
+            name = int(odom[i, 0].item()/10**param)
+            x = float(odom[i, 1])
+            y = float(odom[i, 2])
+            z = float(odom[i, 3])
+            r = float(odom[i, 4])
+            p = float(odom[i, 5])
+            h = float(odom[i, 6])
+            data = [x,y,z,r,p,h]
+            self.img2labels[name] = data
 
     def getName(self, loc):
-        ctr = 0
-        for i in range(len(loc)):
-            if loc[i]=='/':
-                ctr += 1
-            if ctr==2:
-                return loc[i+1:]
-
+        if self.flag == False:
+            ctr = 0
+            for i in range(len(loc)):
+                if loc[i]=='/':
+                    ctr += 1
+                if ctr==2:
+                    return loc[i+1:]
+        else:
+            params = loc.split('/')
+            name = params[-1][:-9]
+            return int(name)
 
 
     def reset(self):

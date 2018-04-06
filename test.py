@@ -1,5 +1,4 @@
 import data_handler as DH
-import sys
 import numpy as np
 
 '''
@@ -13,25 +12,31 @@ numsamples() = prints total number of samples generated from selected images
 remimages() = prints total number of images that remain in the directory
 remsamples() = prints total number of samples that remain from the selected lot of images
 '''
-print(sys.version)
 
-location = "../ShopFacade/"
+# location = "./2013-01-10/"
+# file = 'groundtruth_2013-01-10.csv'
 
-dh = DH.Process(location)
+location = "./2012-03-17/"
+file = 'groundtruth_2012-03-17.csv'
+
+dh = DH.Process(location, file, True)
 
 # pick number of images to pick samples from
-numImages = 50
+numImages = 5
 dh.generateData(numImages)
 dh.remimages()
 
 dh.numsamples()
-flag, images, labels = dh.fetch(60)
+flag, images, labels = dh.fetch(6)
+print(labels)
 print(images.shape, len(labels), flag)
 dh.remsamples()
 
+'''
 # Trick to pick samples from selected images
 numSamples = 60
 flag = True
 while flag==True:
     flag, images, labels = dh.fetch(numSamples)
     dh.remsamples()
+'''

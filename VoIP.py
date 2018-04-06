@@ -1,29 +1,25 @@
 import cv2
-import urllib2
+import urllib.request as urllib2
 import numpy as np
 import sys
 
 # Input the URL shown by IP Webcam
-url = "35.3.102.178:8080"
-stream = 'http://' + url + '/video'
-print('Streaming from: ' + stream)
+url = "35.3.71.126:8080"
+tream = 'http://' + url + '/video'
+print('Streaming from: ' + tream)
 
 # Open ByteStram
-videoStream = urllib2.urlopen(stream)
+stream = urllib2.urlopen(tream)
 
-# Collect Bytes and Process
-packets = ''
+bytes = bytes()
 while True:
-    packets += videoStream.read(1024)
-    a = packets.find('\xff\xd8')
-    b = packets.find('\xff\xd9')
-    if a!=-1 and b!=-1:
-        jpg = packets[a:b+2]
-        packets = packets[b+2:]
-
-        # decode byte stream to form video
-        video = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8),cv2.IMREAD_COLOR)
-        # display video
-        cv2.imshow('WebStream',video)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    bytes += stream.read(1024)
+    a = bytes.find(b'\xff\xd8')
+    b = bytes.find(b'\xff\xd9')
+    if a != -1 and b != -1:
+        jpg = bytes[a:b+2]
+        bytes = bytes[b+2:]
+        i = cv2.imdecode(np.fromstring(jpg, dtype=np.uint8), cv2.IMREAD_COLOR)
+        cv2.imshow('i', i)
+        if cv2.waitKey(1) == 27:
+            exit(0)
