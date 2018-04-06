@@ -57,7 +57,8 @@ def main(pathOdom_,pathImage_,pathWeight_):
 
         # adding odometry
         # TODO: matching the frequency with the sensor measurement, for loop is needed
-        iSam.step(odom.getOdometry(startId))
+        motion,motionCov,timestamp = odom.getOdometry()
+        iSam.update(motion,motionCov)
 
         # getting measurement
         measurement = poseNet.test(images.getImage(startId))

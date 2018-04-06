@@ -13,7 +13,7 @@ class odometry(object):
 
         odom = np.loadtxt(mu_path, delimiter=",")
         # reading the timestamps from the file for synchronize with sensor
-        self.timestamps = odom[:,0]-odom[0,0]
+        self.timestamps = odom[:,0]
 
         if startId == None:
             startId = 0
@@ -43,7 +43,7 @@ class odometry(object):
 
         self.readingId += 1
 
-        return list(self.odom[readingId,:]),list(self.odomCov[readingId,:])
+        return list(self.odom[readingId,:]),list(self.odomCov[readingId,:]),self.timestamps[readingId]
 
     def printOdometry(self,printingId = None):
         if printingId == None:
