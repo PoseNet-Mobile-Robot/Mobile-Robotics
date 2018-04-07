@@ -31,7 +31,7 @@ class Process:
         self.numImages = 0
         self.numSamples = 0
         self.imageLocs = []
-        self.genNum = 128
+        self.genNum = 1
 
         self.sampleImages = []
         self.remImages = []
@@ -41,7 +41,7 @@ class Process:
         self.flag = flag
         self.file = file
         # OS Walk for getting all image files
-        self.OSWalk()
+        self.OSWalk('Train/')
         # print number of images
         self.numimages()
 
@@ -52,8 +52,14 @@ class Process:
         else:
             self.getGround()
 
-    def OSWalk(self):
-        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + 'Train/')
+
+
+###########################################################################
+################         TRAINING DATA FUNCTIONS           ################
+###########################################################################
+
+    def OSWalk(self, paths):
+        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + paths)
              for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
         self.imageLocs = images
 
@@ -203,7 +209,7 @@ class Process:
             self.img2labels[name] = data
 
 
-    def getName(self, loc):
+    def getName(self, loc, digskip = -9):
         if self.flag == False:
             ctr = 0
             for i in range(len(loc)):
@@ -213,13 +219,13 @@ class Process:
                     return loc[i+1:]
         else:
             params = loc.split('/')
-            name = params[-1][:-9]
+            name = params[-1][:digskip]
             return int(name)
 
 
     def store(self, image):
         name = self.getName(image)
-        location = self.location + 'usedImages/'
+        location = self.location + 'TrainImages/'
         # copy image to folder
         if not os.path.exists(location):
             os.makedirs(location)
@@ -266,3 +272,71 @@ class Process:
 
     def remimages(self):
         print('The number of images that remain are: ',np.sum(self.remImages))
+
+
+
+
+
+
+###########################################################################
+################           TEST DATA FUNCTIONS             ################
+###########################################################################
+    def groundtruth(self, param = 4):
+        filename = self.location + self.file
+        odom = np.loadtxt(filename, delimiter = ",")
+        length, _ = odom.shape
+        img2labels = dict()
+
+        for i in range(length):
+            name = int(odom[i, 0].item()/10**param)
+            x = float(odom[i, 1])
+            y = float(odom[i, 2])
+            z = float(odom[i, 3])
+            r = float(odom[i, 4])
+            p = float(odom[i, 5])
+            h = float(odom[i, 6])
+            data = [x,y,z,r,p,h]
+            img2labels[name] = data
+
+        return img2labels
+
+    def getSavingName(self, loc):
+        params = loc.split('/')
+        name = params[-1][:-5]
+        return name
+
+    def generateTest(self):
+        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + 'Test/') for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
+        numImages = len(images)
+        remImages = np.ones((numImages), dtype = bool)
+
+
+        # make training folder
+        location = self.location + 'TestImages/'
+        # copy image to folder
+        if not os.path.exists(location):
+            os.makedirs(location)
+
+        # write image with labels to folder
+        file = location + 'testSet.csv'
+        csv = open(file, "a")
+
+
+        img2labels = self.groundtruth(6)
+        prevName = self.getName(images[0])
+
+        for i in images:
+            name = self.getName(i, -11)
+            if name!=prevName:
+                savingName = self.getSavingName(i)
+                shutil.copy(i, location + savingName + '.tiff')
+                x = str(img2labels[name][0])
+                y = str(img2labels[name][1])
+                z = str(img2labels[name][2])
+                r = str(img2labels[name][3])
+                p = str(img2labels[name][4])
+                h = str(img2labels[name][5])
+                row = savingName + ',' + x + ',' + y + ',' + z + ',' + r + ',' + p + ',' + h + '\n'
+                csv.write(row)
+
+            prevName = name

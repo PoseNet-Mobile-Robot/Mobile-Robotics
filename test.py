@@ -21,6 +21,8 @@ file = 'groundtruth_2012-03-17.csv'
 
 dh = DH.Process(location, file, True)
 
+'''
+# TRAINING PROCESS
 # pick number of images to pick samples from
 numImages = 900
 dh.generateData(numImages)
@@ -37,3 +39,7 @@ flag = True
 while flag==True:
     flag, images, labels = dh.fetch(numSamples)
     dh.remsamples()
+'''
+
+# TESTING PROCESS
+dh.generateTest()
