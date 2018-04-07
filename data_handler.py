@@ -24,7 +24,7 @@ class Process:
     def __init__(self, location, height = 224, width = 224, depth = 3):
         self.img2labels = dict()
         self.idx2img = dict()
-
+        self.num_crops=1
         self.location = location
         self.height = height
         self.width = width
@@ -80,41 +80,61 @@ class Process:
                 ctr += 1
 
         # array to store which sample has been used
-        self.numSamples = 128*num
+        self.numSamples = self.num_crops*num
         self.remSamples = np.ones((self.numSamples), dtype = bool)
 
         # generate samples
         self.process(num, indices)
 
+    def centeredCrop(self, img, output_side_length):
+	height, width, depth = img.shape
+	new_height = output_side_length
+	new_width = output_side_length
+	if height > width:
+		new_height = output_side_length * height / width
+	else:
+		new_width = output_side_length * width / height
+	height_offset = (new_height - output_side_length) / 2
+	width_offset = (new_width - output_side_length) / 2
+	cropped_img = img[height_offset:height_offset + output_side_length,
+						width_offset:width_offset + output_side_length]
+	return cropped_img
 
 
     def process(self, num, indices):
         print('Generating Samples .... ')
 
-        self.sampleImages = np.zeros((num*128, self.height, self.width, self.depth), dtype=np.uint8)
+        self.sampleImages = np.zeros((num*self.num_crops , self.height, self.width, self.depth), dtype=np.uint8)
 
         idx = 0
+        imgs = np.zeros((num,  256, 455, 3))
+        names = []
         for i in range(num):
             # read image
             img = cv2.resize(cv2.imread(indices[i], 1).astype(float), (455,256), interpolation = cv2.INTER_CUBIC)
+            imgs[i] = img
             name = self.getName(indices[i])
+            names.append(name)
+        means = np.mean(imgs, axis=0)
+        imgs = imgs - means
+        #temp_mean = np.mean(img, axis=0)
+        #temp_mean = np.mean(temp_mean, axis=0)
+        #temp_std = np.zeros(self.depth)
 
-            temp_mean = np.mean(img, axis=0)
-            temp_mean = np.mean(temp_mean, axis=0)
-            temp_std = np.zeros(self.depth)
-
-            for i in range(self.depth):
-                img[:,:,i] -= temp_mean[i]
-                temp_std[i] = np.std(img[:,:,i])
-                img[:,:,i] /= temp_std[i]
-
+        #for i in range(self.depth):
+        #    img[:,:,i] -= temp_mean[i]
+        #    temp_std[i] = np.std(img[:,:,i])
+        #    img[:,:,i] /= temp_std[i]
+                
+        for i in range(num):
             # generate 128 random indices for crop
-            for j in range(idx, idx+128):
+            for j in range(idx, idx+self.num_crops ):
                 x = randint(0,31)
                 y = randint(0,230)
-                self.sampleImages[j, :, :, :] = img[x:x + self.height, y:y + self.width, :].copy()
-                self.idx2img[j] = name
-            idx += 128
+                img = imgs[i, :,:,:]
+                self.sampleImages[j, :, :, :] = self.centeredCrop(img, 224)#img[x:x + self.height, y:y + self.width, :].copy()
+                self.idx2img[j] = names[i]
+            idx += self.num_crops
 
 
 
@@ -138,7 +158,10 @@ class Process:
 
                     # gaussian normalization of image to have mean 0, variance 1
                     temp = self.sampleImages[idx, :, :, :].astype(float)
-                    labels[ctr] = self.img2labels[self.idx2img[idx]]
+                    try:
+                        labels[ctr] = self.img2labels[self.idx2img[idx]]
+                    except KeyError:
+                        pdb.set_trace()
                     ctr += 1
 
         return [flag, samples, labels]
