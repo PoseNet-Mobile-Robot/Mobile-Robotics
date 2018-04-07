@@ -22,7 +22,7 @@ file = 'groundtruth_2012-03-17.csv'
 dh = DH.Process(location, file, True)
 
 # pick number of images to pick samples from
-numImages = 5
+numImages = 900
 dh.generateData(numImages)
 dh.remimages()
 

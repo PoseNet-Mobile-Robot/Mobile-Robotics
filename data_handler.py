@@ -31,6 +31,7 @@ class Process:
         self.numImages = 0
         self.numSamples = 0
         self.imageLocs = []
+        self.genNum = 128
 
         self.sampleImages = []
         self.remImages = []
@@ -88,7 +89,7 @@ class Process:
                 ctr += 1
 
         # array to store which sample has been used
-        self.numSamples = 128*num
+        self.numSamples = self.genNum*num
         self.remSamples = np.ones((self.numSamples), dtype = bool)
 
         # generate samples
@@ -97,7 +98,7 @@ class Process:
     def process(self, num, indices):
         print('Generating Samples .... ')
 
-        self.sampleImages = np.zeros((num*128, self.height, self.width, self.depth), dtype=np.uint8)
+        self.sampleImages = np.zeros((num*self.genNum, self.height, self.width, self.depth), dtype=np.uint8)
 
         idx = 0
         for i in range(num):
@@ -112,12 +113,12 @@ class Process:
                 img = cv2.warpAffine(img,M,(cols,rows))
 
             # generate 128 random indices for crop
-            for j in range(idx, idx+128):
+            for j in range(idx, idx + self.genNum):
                 x = randint(0,31)
                 y = randint(0,230)
                 self.sampleImages[j, :, :, :] = img[x:x + self.height, y:y + self.width, :].copy()
                 self.idx2img[j] = name
-            idx += 128
+            idx += self.genNum
 
         for i in range(self.numImages):
             if self.remImages[i] == False:
@@ -154,7 +155,11 @@ class Process:
 
                     # assign sample and labels
                     samples[ctr,:,:,:] = temp
-                    labels[ctr] = self.img2labels[self.idx2img[idx]]
+
+                    if self.idx2img[idx] in self.img2labels.keys():
+                        labels[ctr] = self.img2labels[self.idx2img[idx]]
+                    else:
+                        labels[ctr] = self.img2labels[self.idx2img[idx]+1]
                     ctr += 1
 
         return [flag, samples, labels]
@@ -176,6 +181,7 @@ class Process:
             line = line.split()
             self.img2labels[line[0]] = list(map(float,line[1:8]))
 
+
     def getGround(self):
         filename = self.location + self.file
         odom = np.loadtxt(filename, delimiter = ",")
@@ -195,6 +201,7 @@ class Process:
             h = float(odom[i, 6])
             data = [x,y,z,r,p,h]
             self.img2labels[name] = data
+
 
     def getName(self, loc):
         if self.flag == False:
@@ -221,12 +228,22 @@ class Process:
         # write image with labels to folder
         file = location + 'trainingSet.csv'
         csv = open(file, "a")
-        x = str(self.img2labels[name][0])
-        y = str(self.img2labels[name][1])
-        z = str(self.img2labels[name][2])
-        r = str(self.img2labels[name][3])
-        p = str(self.img2labels[name][4])
-        h = str(self.img2labels[name][5])
+
+        if name in self.img2labels.keys():
+            x = str(self.img2labels[name][0])
+            y = str(self.img2labels[name][1])
+            z = str(self.img2labels[name][2])
+            r = str(self.img2labels[name][3])
+            p = str(self.img2labels[name][4])
+            h = str(self.img2labels[name][5])
+        else:
+            name += 1
+            x = str(self.img2labels[name][0])
+            y = str(self.img2labels[name][1])
+            z = str(self.img2labels[name][2])
+            r = str(self.img2labels[name][3])
+            p = str(self.img2labels[name][4])
+            h = str(self.img2labels[name][5])
 
         row = str(name) + ',' + x + ',' + y + ',' + z + ',' + r + ',' + p + ',' + h + '\n'
         csv.write(row)
@@ -235,20 +252,16 @@ class Process:
         self.remImages = np.ones((self.numImages), dtype = bool)
 
 
-
     def numimages(self):
         print('The total number of images are: ', self.numImages)
-
 
 
     def numsamples(self):
         print('The total number of samples are: ', self.numSamples)
 
 
-
     def remsamples(self):
         print('The number of samples that remain are: ',np.sum(self.remSamples))
-
 
 
     def remimages(self):
