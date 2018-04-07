@@ -73,8 +73,11 @@ class PoseNetiSam(object):
         return
 
     def update(self, updateNum = 1):
+        self.isam.update(self.graph, self.initialValues)
+        updateNum -= 1
+        
         while updateNum > 0:
-            self.isam.update(self.graph, self.initialValues)
+            self.isam.update()
             updateNum -= 1
 
         # clear graph and initial values

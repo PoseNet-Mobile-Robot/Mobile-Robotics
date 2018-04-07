@@ -26,11 +26,12 @@ def main(pathOdom_,pathImage_,pathWeight_):
     
     # parameter
     resultsId = 1
-    iSamUpdateRate = 2 # times of updates in one iteration
+    iSamUpdateRate = 1 # times of updates in one iteration
     startId = 0 # start image id
     endId = 1e3 # end image id
     numInterval = 1
     iterations = int((endId-startId)/numInterval)
+    timestamp = 0
     
     # read data
     odom = odometry(pathOdom,startId,endId)
@@ -42,26 +43,32 @@ def main(pathOdom_,pathImage_,pathWeight_):
 
     # records of path
     records = list()
+    groundTruth = list()
     
     # prior info
     priorMu = [0,0,0]
     priorCov = [0,0,0]
     iSam.initialize(priorMu,priorCov) # adding prior
+    img,imgTimestamp,currGT = images.getImage(startId)
     measurement = poseNet.test(images.getImage(startId))
     startId += numInterval
     iSam.addObs(measurement,poseNetCov) # adding first measurement
-    iSam.update(2) # update the graph
-
+    currEstimate = iSam.update(2) # update the graph
+    records.append(currEstimate)
+    groundTruth.append(currGT)
+    
     # localization begins here
     for i in range(iterations):
 
         # adding odometry
-        # TODO: matching the frequency with the sensor measurement, for loop is needed
-        motion,motionCov,timestamp = odom.getOdometry()
-        iSam.update(motion,motionCov)
+        # BETA: matching the frequency with the sensor measurement, for loop is needed
+        while timestamp<=imgTimestamp:
+            motion,motionCov,timestamp = odom.getOdometry()
+            iSam.step(motion,motionCov)
 
-        # getting measurement
-        measurement = poseNet.test(images.getImage(startId))
+        # getting measurement and update image timestamp
+        measurement,imgTimestamp,currGT = poseNet.test(images.getImage(startId))
+        groundTruth.append(currGT)
 
         # adding measurement factor
         iSam.addObs(measurement,poseNetCov)
@@ -74,7 +81,8 @@ def main(pathOdom_,pathImage_,pathWeight_):
         startId += numInterval
 
         # plot tool for the calculated trajetory
-        ax.plot(records[-2:,1],records[-2:,2]) # plot line from x_t-1 to x_t
+        ax.plot(records[-2:,1],records[-2:,2],c='g') # plot line from x_t-1 to x_t
+        ax.plot(groundTruth[-2:,1],groundTruth[-2:,2],c='r') # plot line of ground truth from x_t-1 to x_t
         plt.pause(0.01) # whether need to pause?
         plt.draw()
         
