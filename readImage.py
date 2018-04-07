@@ -24,8 +24,14 @@ class readImage():
         if isPlot:
             cv2.imshow('image{0}'.format(imageId),image)
 
-        key = self.timestamp[self.currKey]
+        timestamp = self.timestamp[self.currKey]
         groundTruth = self.groundTruth[self.currKey,:]
         self.currKey += 1
         
-        return image, key, [groundTruth[0],groundTruth[1],groundTruth[5]]
+        return image, timestamp, [groundTruth[0],groundTruth[1],groundTruth[5]]
+
+    def getStartId(self):
+        return self.timestamp[0]
+
+    def length(self):
+        return len(self.timestamp)

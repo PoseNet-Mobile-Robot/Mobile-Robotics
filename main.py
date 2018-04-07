@@ -27,15 +27,12 @@ def main(pathOdom_,pathImage_,pathWeight_):
     # parameter
     resultsId = 1
     iSamUpdateRate = 1 # times of updates in one iteration
-    startId = 0 # start image id
-    endId = 1e3 # end image id
-    numInterval = 1
-    iterations = int((endId-startId)/numInterval)
     timestamp = 0
     
     # read data
-    odom = odometry(pathOdom,startId,endId)
     images = readImage(pathImage)
+    startId = images.getStartId()
+    odom = odometry(pathOdom,startId)
     # TODO: read the ground truth for plot comparision
     
     # sensor info
@@ -51,11 +48,13 @@ def main(pathOdom_,pathImage_,pathWeight_):
     iSam.initialize(priorMu,priorCov) # adding prior
     img,imgTimestamp,currGT = images.getImage(startId)
     measurement = poseNet.test(images.getImage(startId))
-    startId += numInterval
+    startId += 1
     iSam.addObs(measurement,poseNetCov) # adding first measurement
     currEstimate = iSam.update(2) # update the graph
     records.append(currEstimate)
     groundTruth.append(currGT)
+
+    iterations = images.length()
     
     # localization begins here
     for i in range(iterations):
@@ -78,7 +77,7 @@ def main(pathOdom_,pathImage_,pathWeight_):
         records.append(currentEst)
         
         # increment the Id
-        startId += numInterval
+        startId += 1
 
         # plot tool for the calculated trajetory
         ax.plot(records[-2:,1],records[-2:,2],c='g') # plot line from x_t-1 to x_t
@@ -90,7 +89,9 @@ def main(pathOdom_,pathImage_,pathWeight_):
     pickleOut = open('dict.{0}_result'.format(resultsId),'wb')
     pickle.dump(records,pickleOut)
     pickleOut.close()
-    
+
+    # save fig
+    fig.save("Trajectory{0}".format(resultsId))
 
 if __name__=='__main__':
 

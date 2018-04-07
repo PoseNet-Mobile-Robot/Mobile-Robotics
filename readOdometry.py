@@ -6,7 +6,10 @@ class odometry(object):
     '''
     odometry is a class that read and distribute odometries
     '''
-    def __init__(self, filepath, startId=None, endId=None):
+    def __init__(self, filepath, startId=None):
+        ''' if startId is None read the whole dataset
+            if startId is not None find the closest timestamp within matchEps us
+        '''
 
         mu_path = os.path.join(filepath,'odometry_mu.csv')
         cov_path = os.path.join(filepath,'odometry_cov.csv')
@@ -16,9 +19,17 @@ class odometry(object):
         # divide by 10 is a compromise for image data which only has 15 digits
         self.timestamps = odom[:,0]/10
 
+        matchEps = 1e6
+
         if startId == None:
             startId = 0
             endId = len(odom)
+        else:
+            for i in range(len(self.timestamps)):
+                if(startId-self.timestamps[i]<=matchEps):
+                    startId = i
+                    self.timestamps = self.timestamps[i:]
+                    break
 
         # reading odometry mu (delta_x,delta_y,delta_theta)
         x = odom[startId:endId, 1]
@@ -38,9 +49,6 @@ class odometry(object):
         # when getting new odometry the reading id will increment
         if readingId == None:
             readingId = self.readingId
-
-        ## accumulate the odometry if reading is not continuous
-        ## if the file is set to correspond with the image file then ommit this comment
 
         self.readingId += 1
 
