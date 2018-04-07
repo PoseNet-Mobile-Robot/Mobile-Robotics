@@ -28,15 +28,12 @@ dh.remimages()
 
 dh.numsamples()
 flag, images, labels = dh.fetch(6)
-print(labels)
 print(images.shape, len(labels), flag)
 dh.remsamples()
 
-'''
 # Trick to pick samples from selected images
 numSamples = 60
 flag = True
 while flag==True:
     flag, images, labels = dh.fetch(numSamples)
     dh.remsamples()
-'''
