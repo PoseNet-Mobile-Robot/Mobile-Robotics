@@ -1,5 +1,4 @@
-import cv2
-import sys, os
+import cv2, sys, os, shutil, csv
 from random import randint, sample
 import numpy as np
 import pdb
@@ -53,13 +52,23 @@ class Process:
             self.getGround()
 
     def OSWalk(self):
-        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location)
+        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + 'Train/')
              for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
         self.imageLocs = images
+
 
         # for i in range(len(images)):
         #    a,b = images[i].split('\\')
         #    self.imageLocs[i] = a + '/' + b
+
+        if self.flag==False:
+            for i in range(len(images)):
+                a,b = images[i].split('/')
+                self.imageLocs[i] = a + '/' + b
+        else:
+            for i in range(len(images)):
+                self.imageLocs[i] = images[i]
+
 
         # array to store which image has been used
         self.numImages = len(self.imageLocs)
@@ -110,16 +119,18 @@ class Process:
         print('Generating Samples .... Note: no img normalization ')
 
         self.sampleImages = np.zeros((num*self.num_crops , self.height, self.width, self.depth), dtype=np.uint8)
-
         idx = 0
         imgs = np.zeros((num,  256, 455, 3))
-        names = []
+        names = ['' for i in range(num)]
         for i in range(num):
             # read image
             img = cv2.resize(cv2.imread(indices[i], 1).astype(float), (455,256), interpolation = cv2.INTER_CUBIC)
-            imgs[i] = img
+
             name = self.getName(indices[i])
-            names.append(name)
+            if (name in self.img2labels ):
+                names[i] = name
+                imgs[i,:,:,:] = img
+
         means = np.mean(imgs, axis=0)
         imgs = imgs - means
         
@@ -146,10 +157,15 @@ class Process:
                 y = randint(0,230)
 
                 self.sampleImages[j, :, :, :] = img[x:x + self.height, y:y + self.width, :].copy()
-                self.idx2img[j] = names[i]
+                try:
+                    self.idx2img[j] = names[i]
+                except IndexError:
+                    pdb.set_trace()
             idx += self.num_crops
 
-
+        for i in range(self.numImages):
+            if self.remImages[i] == False:
+                self.store(self.imageLocs[i])
 
     def fetch(self, num):
         samples = np.zeros((num, self.height, self.width, self.depth), dtype=np.float)
@@ -232,6 +248,29 @@ class Process:
             name = params[-1][:-9]
             return int(name)
 
+
+    def store(self, image):
+        name = self.getName(image)
+        location = self.location + 'usedImages/'
+        # copy image to folder
+        if  os.path.exists(location):
+            shutil.rmtree(location)
+        if not  os.path.exists(location):
+            os.makedirs(location)
+        shutil.copy(image, location +  str(name) + '.tiff')
+
+        # write image with labels to folder
+        file = location + 'trainingSet.csv'
+        csv = open(file, "a")
+        x = str(self.img2labels[name][0])
+        y = str(self.img2labels[name][1])
+        z = str(self.img2labels[name][2])
+        r = str(self.img2labels[name][3])
+        p = str(self.img2labels[name][4])
+        h = str(self.img2labels[name][5])
+
+        row = str(name) + ',' + x + ',' + y + ',' + z + ',' + r + ',' + p + ',' + h + '\n'
+        csv.write(row)
 
     def reset(self):
         self.remImages = np.ones((self.numImages), dtype = bool)

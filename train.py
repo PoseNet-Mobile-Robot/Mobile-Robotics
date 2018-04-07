@@ -1,5 +1,5 @@
 import sys, os
-sys.path.insert(0, '/home/eecs568/miniconda3/envs/tensorflow/lib/python3.5/site-packages')
+#sys.path.insert(0, '/home/eecs568/miniconda3/envs/tensorflow/lib/python3.5/site-packages')
 import data_handler
 from datetime import datetime
 import numpy as np
@@ -60,7 +60,7 @@ class trainer():
             print("Model initialized")
 
     def init_data_handler(self,path_to_data):
-        self.data_handler = data_handler.Process(path_to_data)
+        self.data_handler = data_handler.Process(path_to_data, 'dataset_train.txt', False)
         #self.data_handler = gen_data.get_data()
 
     def load_weight(self,path_to_weight):
@@ -154,8 +154,9 @@ class trainer():
     def train(self, batch_size, epochs):
         
         total_loss = 0
-        
-        total_batch = int(self.data_handler.numimages() * self.data_handler.num_crops / batch_size) #100       
+        total_batch = int(self.data_handler.numimages() * self.data_handler.num_crops * 1.0 / batch_size) #100
+        if total_batch==0:
+            pdb.set_trace()
         #print("[trainer] Start Training, size of dataset is " +str(self.data_handler.numimages() * self.data_handler.num_crops ))
         #pdb.set_trace()
         for epoch in range(epochs):
@@ -200,5 +201,5 @@ if __name__ == "__main__":
         argv[3] = 100
         argv[4] = bool(int(False))
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    train_thread = trainer(argv[1], argv[2], int(argv[3]), bool(int(argv[4])))
+    train_thread = trainer(argv[1], argv[2], int(argv[3]), use_quaternion=True, resume_training=False )
     train_thread.train(32, 600)

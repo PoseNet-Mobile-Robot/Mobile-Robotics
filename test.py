@@ -16,30 +16,25 @@ remsamples() = prints total number of samples that remain from the selected lot 
 # location = "./2013-01-10/"
 # file = 'groundtruth_2013-01-10.csv'
 
-location = "/media/eecs568/My Passport/NCLT/2012-03-17/2012-03-17/"
+location = "/home/eecs568/eecs568/Mobile-Robotics/nclt/"
 file = 'groundtruth_2012-03-17.csv'
 
 dh = DH.Process(location, file, True)
 
 # pick number of images to pick samples from
-numImages = 100
+numImages = 1000
 dh.generateData(numImages)
 dh.remimages()
 
 dh.numsamples()
-flag, images, labels = dh.fetch(2)
-print(labels)
+flag, images, labels = dh.fetch(6)
 print(images.shape, len(labels), flag)
 dh.remsamples()
 
-
 # Trick to pick samples from selected images
-numSamples = 60
+numSamples = 10
 flag = True
 while flag==True:
     flag, images, labels = dh.fetch(numSamples)
-    cv2.imshow('image', images[0,:,:,:])
-    cv2.waitKey(0)
-    pdb.set_trace()
     dh.remsamples()
 
