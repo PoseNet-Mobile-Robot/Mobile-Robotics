@@ -21,7 +21,7 @@ class Process:
     remsamples() = prints total number of samples that remain from the selected lot of images
     '''
 
-    def __init__(self, location, height = 224, width = 224, depth = 3):
+    def __init__(self, location, file = None, flag = False, height = 224, width = 224, depth = 3):
         self.img2labels = dict()
         self.idx2img = dict()
         self.num_crops=1
@@ -37,17 +37,24 @@ class Process:
         self.remImages = []
         self.remSamples = []
 
+        # flag for processing data from NCLT / Cambridge
+        self.flag = flag
+        self.file = file
         # OS Walk for getting all image files
         self.OSWalk()
         # print number of images
         self.numimages()
-        # populate labels dict
-        self.getLabels()
 
+        # populate labels dict
+        # False implies Cambridge Dataset, True is NCLT
+        if self.flag == False:
+            self.getLabels()
+        else:
+            self.getGround()
 
     def OSWalk(self):
         images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location)
-             for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif"))]
+             for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
         self.imageLocs = images
 
         # for i in range(len(images)):
@@ -57,8 +64,6 @@ class Process:
         # array to store which image has been used
         self.numImages = len(self.imageLocs)
         self.remImages = np.ones((self.numImages), dtype = bool)
-
-
 
     def generateData(self, num):
         ctr = 0
@@ -87,22 +92,22 @@ class Process:
         self.process(num, indices)
 
     def centeredCrop(self, img, output_side_length):
-	height, width, depth = img.shape
-	new_height = output_side_length
-	new_width = output_side_length
-	if height > width:
-		new_height = output_side_length * height / width
-	else:
-		new_width = output_side_length * width / height
-	height_offset = (new_height - output_side_length) / 2
-	width_offset = (new_width - output_side_length) / 2
-	cropped_img = img[height_offset:height_offset + output_side_length,
-						width_offset:width_offset + output_side_length]
-	return cropped_img
+        height, width, depth = img.shape
+        new_height = output_side_length
+        new_width = output_side_length
+        if height > width:
+            new_height = output_side_length * height / width
+        else:
+            new_width = output_side_length * width / height
+            height_offset = (new_height - output_side_length) / 2
+            width_offset = (new_width - output_side_length) / 2
+            cropped_img = img[height_offset:height_offset + output_side_length,
+                              width_offset:width_offset + output_side_length]
+        return cropped_img
 
 
     def process(self, num, indices):
-        print('Generating Samples .... ')
+        print('Generating Samples .... Note: no img normalization ')
 
         self.sampleImages = np.zeros((num*self.num_crops , self.height, self.width, self.depth), dtype=np.uint8)
 
@@ -117,6 +122,7 @@ class Process:
             names.append(name)
         means = np.mean(imgs, axis=0)
         imgs = imgs - means
+        
         #temp_mean = np.mean(img, axis=0)
         #temp_mean = np.mean(temp_mean, axis=0)
         #temp_std = np.zeros(self.depth)
@@ -127,12 +133,19 @@ class Process:
         #    img[:,:,i] /= temp_std[i]
                 
         for i in range(num):
+            # rotate image if NCLT
+            img = imgs[i, :,:,:]
+            if self.flag==True:
+                rows, cols, _ = img.shape
+                M = cv2.getRotationMatrix2D((cols/2,rows/2),90,1)
+                img = cv2.warpAffine(img,M,(cols,rows))
+
             # generate 128 random indices for crop
             for j in range(idx, idx+self.num_crops ):
                 x = randint(0,31)
                 y = randint(0,230)
-                img = imgs[i, :,:,:]
-                self.sampleImages[j, :, :, :] = self.centeredCrop(img, 224)#img[x:x + self.height, y:y + self.width, :].copy()
+
+                self.sampleImages[j, :, :, :] = img[x:x + self.height, y:y + self.width, :].copy()
                 self.idx2img[j] = names[i]
             idx += self.num_crops
 
@@ -157,11 +170,13 @@ class Process:
                     self.remSamples[idx] = False
 
                     # gaussian normalization of image to have mean 0, variance 1
-                    temp = self.sampleImages[idx, :, :, :].astype(float)
                     try:
                         labels[ctr] = self.img2labels[self.idx2img[idx]]
+                        samples[ctr,:,:,:] = self.sampleImages[idx, :, :, :].astype(float)
+              
                     except KeyError:
                         pdb.set_trace()
+                        continue
                     ctr += 1
 
         return [flag, samples, labels]
@@ -183,15 +198,39 @@ class Process:
             line = lines[i].strip()
             line = line.split()
             self.img2labels[line[0]] = list(map(float,line[1:8]))
-            
-    def getName(self, loc):
-        ctr = 0
-        for i in range(len(loc)):
-            if loc[i]=='/':
-                ctr += 1
-            if ctr==2:
-                return loc[i+1:]
 
+    def getGround(self):
+        filename = self.location + self.file
+        odom = np.loadtxt(filename, delimiter = ",")
+        length, _ = odom.shape
+
+        # the number we have to divide by to get a correct association
+        param = 4
+
+        for i in range(length):
+            name = int(odom[i, 0].item()/10**param)
+
+            x = float(odom[i, 1])
+            y = float(odom[i, 2])
+            z = float(odom[i, 3])
+            r = float(odom[i, 4])
+            p = float(odom[i, 5])
+            h = float(odom[i, 6])
+            data = [x,y,z,r,p,h]
+            self.img2labels[name] = data
+
+    def getName(self, loc):
+        if self.flag == False:
+            ctr = 0
+            for i in range(len(loc)):
+                if loc[i]=='/':
+                    ctr += 1
+                if ctr==2:
+                    return loc[i+1:]
+        else:
+            params = loc.split('/')
+            name = params[-1][:-9]
+            return int(name)
 
 
     def reset(self):
@@ -217,4 +256,4 @@ class Process:
 
     def remimages(self):
         print('The number of images that remain are: ',np.sum(self.remImages))
-        return remImages
+        return self.remImages

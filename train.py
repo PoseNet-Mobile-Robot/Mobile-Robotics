@@ -29,14 +29,15 @@ def delete_network_backups(filename_prefix):
 
 class trainer():
     
-    def __init__(self,path_to_weight, path_to_data, beta, resume_training=False):
+    def __init__(self,path_to_weight, path_to_data, beta, use_quaternion=True, resume_training=False):
         self.network_input_size = 224
+        self.output_dim = 7 if use_quaternion else 6
         self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
         if resume_training:
             self.restore_network(path_to_weight)
         else:
             self.image_inputs = tf.placeholder(tf.float32, [None, self.network_input_size, self.network_input_size, 3])
-            self.label_inputs = tf.placeholder(tf.float32, [None, 7])  # [ X Y Z W  P Q R]
+            self.label_inputs = tf.placeholder(tf.float32, [None, self.output_dim])  # [ X Y Z W  P Q R]
 
             self.network = vgg.VGG16({'data': self.image_inputs})
             self.regen_regression_network()
@@ -84,9 +85,9 @@ class trainer():
             fc9_input_shape = fc8.get_shape()
 
             feed_in, dim = (fc8, fc9_input_shape[-1].value)
-            fc9_weights = tf.get_variable('weights', [dim, 7])
+            fc9_weights = tf.get_variable('weights', [dim, self.output_dim])
             self.network.variable_summaries( fc9_weights,  "_weights_fc" )
-            fc9_biases =  tf.get_variable('biases', [7])
+            fc9_biases =  tf.get_variable('biases', [self.output_dim])
             op = tf.nn.xw_plus_b
             fc9 = op(feed_in, fc9_weights, fc9_biases, name=scope.name)
         self.init_vars = [fc8_weights, fc8_biases , fc9_weights,  fc9_biases]
@@ -109,8 +110,7 @@ class trainer():
         
     def build_loss(self, beta=100):
         self.translation_loss = tf.sqrt(tf.nn.l2_loss(self.regression_out[0:3] - self.label_inputs[0:3]))
-        self.rotation_loss = tf.sqrt(tf.nn.l2_loss( self.regression_out[3:7] - self.label_inputs[3:7]  ))
-        #self.rotation_loss = tf.sqrt(tf.nn.l2_loss( self.regression_out[3:7]/tf.norm(self.regression_out[3:7]) - self.label_inputs[3:7]  ))
+        self.rotation_loss = tf.sqrt(tf.nn.l2_loss( self.regression_out[3:] - self.label_inputs[3:]  ))
         self.loss = self.translation_loss + beta * self.rotation_loss
         tf.identity(self.loss, name="final_loss")
 
