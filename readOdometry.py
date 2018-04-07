@@ -13,7 +13,8 @@ class odometry(object):
 
         odom = np.loadtxt(mu_path, delimiter=",")
         # reading the timestamps from the file for synchronize with sensor
-        self.timestamps = odom[:,0]
+        # divide by 10 is a compromise for image data which only has 15 digits
+        self.timestamps = odom[:,0]/10
 
         if startId == None:
             startId = 0
