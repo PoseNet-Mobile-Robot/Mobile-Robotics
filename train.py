@@ -8,7 +8,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import cv2, imutils
 import vgg
-import gen_data
+import gen_data_nclt as gen_data
 import pdb
 
 def delete_network_backups(filename_prefix):
@@ -60,8 +60,8 @@ class trainer():
             print("Model initialized")
 
     def init_data_handler(self,path_to_data):
-        self.data_handler = data_handler.Process(path_to_data, 'dataset_train.txt', False)
-        #self.data_handler = gen_data.get_data()
+        #self.data_handler = data_handler.Process(path_to_data, 'dataset_train.txt', False)
+        self.data_handler = gen_data.get_data()
 
     def load_weight(self,path_to_weight):
         self.network.load(path_to_weight, self.sess)
@@ -130,42 +130,46 @@ class trainer():
         self.network.variable_summaries(self.rotation_loss, "rotation_loss_")
         self.network.variable_summaries(self.loss, "final_weighted_loss_")
 
-    def test(self, img, num_random_crops=20):
+    def test(self, img, need_rotate_angle=270, num_random_crops=20):
         if img.shape[2] != 3:
             print ("We only accept 3-dimensional rgb images")
-        if img.shape[0] != self.network_input_size or img.shape[1] != self.network_input_size:
-            if img.shape[0] < img.shape[1]:
-                img = imutils.resize(img , height=256, interpolation=cv2.INTER_CUBIC)
-            else:
-                img = imutils.resize(img, width=256, interpolation=cv2.INTER_CUBIC)
+        if img.shape[0] > img.shape[1]:
+            img = imutils.rotate(img, need_rotate_angle)
+            img = imutils.resize(img , height=256)
+
         input_size = self.network_input_size # 224 here
         input_batch = np.zeros((num_random_crops,input_size,input_size,3))
-        rand_range = [img.shape[0]-input_size, img.shape[1]-input_size] # height, width
-        for index in range(num_random_crops):
-            h = np.random.randint(rand_range[0])
-            w = np.random.randint(rand_range[1])
-            input_batch[index, :] = img[h:h+input_size, w:w+input_size, :]
-        t_r_output = self.sess.run([self.regression_out],
+        if num_random_crops == 1:
+            rand_range = [img.shape[0]-input_size, img.shape[1]-input_size] # height, width
+            for index in range(num_random_crops):
+                h = np.random.randint(rand_range[0])
+                w = np.random.randint(rand_range[1])
+                input_batch[index, :] = img[h:h+input_size, w:w+input_size, :]
+                t_r_output = self.sess.run([self.regression_out],
                                    feed_dict={self.image_inputs: input_batch})
-        return np.mean(t_r_output, axis=0)
+            return np.mean(t_r_output, axis=0)
+        else:
+            tf_output = self.sess.run([self.regression_out],
+                                      feed_dict={self.image_inputs: gen_data_nclt.centeredCrop(img, input_size)} )
+            return tf_output
 
     
     
     def train(self, batch_size, epochs):
         
         total_loss = 0
-        total_batch = int(self.data_handler.numimages() * self.data_handler.num_crops * 1.0 / batch_size) #100
+        total_batch = 281 #int(self.data_handler.numimages() * self.data_handler.genNum * 1.0 / batch_size) #100
         if total_batch==0:
             pdb.set_trace()
         #print("[trainer] Start Training, size of dataset is " +str(self.data_handler.numimages() * self.data_handler.num_crops ))
         #pdb.set_trace()
         for epoch in range(epochs):
-            self.data_handler.reset()
-            self.data_handler.generateData(500)
-            #data_gen = gen_data.gen_data_batch(self.data_handler )
+            #self.data_handler.reset()
+            #self.data_handler.generateData(500)
+            data_gen = gen_data.gen_data_batch(self.data_handler )
             for i in range(total_batch):
                 
-                data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
+                #data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
                 '''
                 if data_runout_flag == False:
                     if self.data_handler.remimages() > 0:
@@ -175,8 +179,8 @@ class trainer():
                         self.data_handler.generateData(500)
                     data_runout_flag, one_batch_image , one_batch_label = self.data_handler.fetch(batch_size)
                 '''
-                #one_batch_image, np_poses_x, np_poses_q = next(data_gen)
-                #one_batch_label = np.hstack((np_poses_x, np_poses_q))
+                one_batch_image, np_poses_x, np_poses_q = next(data_gen)
+                one_batch_label = np.hstack((np_poses_x, np_poses_q))
                 feeds ={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label }
                 summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], feed_dict=feeds) 
                 self.sess.run([self.train_op], feed_dict=feeds )
@@ -195,11 +199,12 @@ class trainer():
 if __name__ == "__main__":
     argv = sys.argv
     if len(sys.argv) < 5:
-        argv = ['' for _ in range(5)]
+        argv = ['' for _ in range(6)]
         argv[1] = './vgg.data'
         argv[2] = './ShopFacade/'
         argv[3] = 100
-        argv[4] = bool(int(False))
+        argv[4] = False
+        argv[5] = bool(int(False))
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    train_thread = trainer(argv[1], argv[2], int(argv[3]), use_quaternion=True, resume_training=False )
+    train_thread = trainer(argv[1], argv[2], int(argv[3]), use_quaternion=argv[4], resume_training=False )
     train_thread.train(32, 600)

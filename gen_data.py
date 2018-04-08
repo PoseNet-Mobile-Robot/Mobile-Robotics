@@ -4,7 +4,7 @@ import cv2, os, sys
 import numpy as np
 import random
 batch_size = 32
-directory = './ShopFacade/'
+directory = './nclt_new/'
 dataset = 'dataset_train.txt'
 
 class datasource(object):

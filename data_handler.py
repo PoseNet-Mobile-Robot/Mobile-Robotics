@@ -23,7 +23,7 @@ class Process:
     def __init__(self, location, file = None, flag = False, height = 224, width = 224, depth = 3):
         self.img2labels = dict()
         self.idx2img = dict()
-        self.num_crops=1
+        #self.num_crops=1
         self.location = location
         self.height = height
         self.width = width
@@ -31,6 +31,7 @@ class Process:
         self.numImages = 0
         self.numSamples = 0
         self.imageLocs = []
+        self.genNum = 128
 
         self.sampleImages = []
         self.remImages = []
@@ -52,7 +53,7 @@ class Process:
             self.getGround()
 
     def OSWalk(self):
-        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + 'Train/')
+        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + 'seq/')
              for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
         self.imageLocs = images
 
@@ -83,7 +84,7 @@ class Process:
         if rem < num:
             print('Number of Images left to select: ', rem)
             print('Generating samples for the remaining images')
-
+        pdb.set_trace()
         num = min(rem, num) # only activated when the number of images left is less than the request
 
         while ctr<num:
@@ -94,7 +95,7 @@ class Process:
                 ctr += 1
 
         # array to store which sample has been used
-        self.numSamples = self.num_crops*num
+        self.numSamples = self.genNum*num
         self.remSamples = np.ones((self.numSamples), dtype = bool)
 
         # generate samples
@@ -117,8 +118,7 @@ class Process:
 
     def process(self, num, indices):
         print('Generating Samples .... Note: no img normalization ')
-
-        self.sampleImages = np.zeros((num*self.num_crops , self.height, self.width, self.depth), dtype=np.uint8)
+        self.sampleImages = np.zeros((num*self.genNum, self.height, self.width, self.depth), dtype=np.uint8)
         idx = 0
         imgs = np.zeros((num,  256, 455, 3))
         names = ['' for i in range(num)]
@@ -152,7 +152,7 @@ class Process:
                 img = cv2.warpAffine(img,M,(cols,rows))
 
             # generate 128 random indices for crop
-            for j in range(idx, idx+self.num_crops ):
+            for j in range(idx, idx + self.genNum):
                 x = randint(0,31)
                 y = randint(0,230)
 
@@ -161,7 +161,7 @@ class Process:
                     self.idx2img[j] = names[i]
                 except IndexError:
                     pdb.set_trace()
-            idx += self.num_crops
+            idx += self.genNum
 
         for i in range(self.numImages):
             if self.remImages[i] == False:
@@ -185,14 +185,13 @@ class Process:
                 if self.remSamples[idx]==True:
                     self.remSamples[idx] = False
 
-                    # gaussian normalization of image to have mean 0, variance 1
-                    try:
+                    if self.idx2img[idx] in self.img2labels.keys():
                         labels[ctr] = self.img2labels[self.idx2img[idx]]
-                        samples[ctr,:,:,:] = self.sampleImages[idx, :, :, :].astype(float)
-              
-                    except KeyError:
-                        pdb.set_trace()
-                        continue
+                    else:
+                        labels[ctr] = self.img2labels[self.idx2img[idx]+1]
+
+                    samples[ctr,:,:,:] = self.sampleImages[idx, :, :, :].astype(float)
+                    # gaussian normalization of image to have mean 0, variance 1
                     ctr += 1
 
         return [flag, samples, labels]
@@ -215,6 +214,7 @@ class Process:
             line = line.split()
             self.img2labels[line[0]] = list(map(float,line[1:8]))
 
+
     def getGround(self):
         filename = self.location + self.file
         odom = np.loadtxt(filename, delimiter = ",")
@@ -234,6 +234,7 @@ class Process:
             h = float(odom[i, 6])
             data = [x,y,z,r,p,h]
             self.img2labels[name] = data
+
 
     def getName(self, loc):
         if self.flag == False:
@@ -262,12 +263,22 @@ class Process:
         # write image with labels to folder
         file = location + 'trainingSet.csv'
         csv = open(file, "a")
-        x = str(self.img2labels[name][0])
-        y = str(self.img2labels[name][1])
-        z = str(self.img2labels[name][2])
-        r = str(self.img2labels[name][3])
-        p = str(self.img2labels[name][4])
-        h = str(self.img2labels[name][5])
+
+        if name in self.img2labels.keys():
+            x = str(self.img2labels[name][0])
+            y = str(self.img2labels[name][1])
+            z = str(self.img2labels[name][2])
+            r = str(self.img2labels[name][3])
+            p = str(self.img2labels[name][4])
+            h = str(self.img2labels[name][5])
+        else:
+            name += 1
+            x = str(self.img2labels[name][0])
+            y = str(self.img2labels[name][1])
+            z = str(self.img2labels[name][2])
+            r = str(self.img2labels[name][3])
+            p = str(self.img2labels[name][4])
+            h = str(self.img2labels[name][5])
 
         row = str(name) + ',' + x + ',' + y + ',' + z + ',' + r + ',' + p + ',' + h + '\n'
         csv.write(row)
@@ -276,22 +287,18 @@ class Process:
         self.remImages = np.ones((self.numImages), dtype = bool)
 
 
-
     def numimages(self):
         print('The total number of images are: ', self.numImages)
         return self.numImages
 
 
-
     def numsamples(self):
         print('The total number of samples are: ', self.numSamples)
         return self.numSamples
-        
 
     def remsamples(self):
         print('The number of samples that remain are: ',np.sum(self.remSamples))
         return self.remSamples
-
 
     def remimages(self):
         print('The number of images that remain are: ',np.sum(self.remImages))
