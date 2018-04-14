@@ -6,7 +6,7 @@ class odometry(object):
     '''
     odometry is a class that read and distribute odometries
     '''
-    def __init__(self, filepath, startId=None):
+    def __init__(self, filepath, startId=None, endId=None):
         ''' if startId is None read the whole dataset
             if startId is not None find the closest timestamp within matchEps us
         '''
@@ -16,8 +16,7 @@ class odometry(object):
 
         odom = np.loadtxt(mu_path, delimiter=",")
         # reading the timestamps from the file for synchronize with sensor
-        # divide by 10 is a compromise for image data which only has 15 digits
-        self.timestamps = odom[:,0]/10
+        self.timestamps = odom[:,0].astype(int)
 
         matchEps = 1e6
 
@@ -26,11 +25,15 @@ class odometry(object):
             endId = len(odom)
         else:
             for i in range(len(self.timestamps)):
-                if(startId-self.timestamps[i]<=matchEps):
+                if(abs(startId-self.timestamps[i])<=matchEps and self.timestamps[i]>startId):
                     startId = i
-                    self.timestamps = self.timestamps[i:]
                     break
-
+            for i in range(len(self.timestamps)):
+                if(abs(endId-self.timestamps[i])<=matchEps and self.timestamps[i]>endId):
+                    endId = i+1
+                    break
+        # corp timestamps
+        self.timestamps = self.timestamps[startId:endId]
         # reading odometry mu (delta_x,delta_y,delta_theta)
         x = odom[startId:endId, 1]
         y = odom[startId:endId, 2]
@@ -58,4 +61,4 @@ class odometry(object):
         if printingId == None:
             printingId = self.readingId+1
 
-        print "The next odometry is:",list(self.odom[printingId,:]),"\nThe Covariance is",list(self.odomCov[printingId,:])
+        print("The next odometry is:",list(self.odom[printingId,:]),"\nThe Covariance is",list(self.odomCov[printingId,:]))

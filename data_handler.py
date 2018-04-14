@@ -1,7 +1,7 @@
-import cv2
-import sys, os
+import cv2, sys, os, shutil, csv
 from random import randint, sample
 import numpy as np
+import pdb
 
 class Process:
     '''
@@ -21,10 +21,15 @@ class Process:
     remsamples() = prints total number of samples that remain from the selected lot of images
     '''
 
+
     def __init__(self, location, height = 224, width = 224, depth = 3):
         self.img2labels = dict()
         self.idx2img = dict()
-
+        
+    def __init__(self, location, file = None, flag = False, height = 224, width = 224, depth = 3):
+        self.img2labels = dict()
+        self.idx2img = dict()
+        #self.num_crops=1
         self.location = location
         self.height = height
         self.width = width
@@ -32,11 +37,15 @@ class Process:
         self.numImages = 0
         self.numSamples = 0
         self.imageLocs = []
+        self.genNum = 128
 
         self.sampleImages = []
         self.remImages = []
         self.remSamples = []
 
+        # flag for processing data from NCLT / Cambridge
+        self.flag = flag
+        self.file = file
         # OS Walk for getting all image files
         self.OSWalk()
         # print number of images
@@ -54,10 +63,35 @@ class Process:
             a,b = images[i].split('\\')
             self.imageLocs[i] = a + '/' + b
 
+        # populate labels dict
+        # False implies Cambridge Dataset, True is NCLT
+        if self.flag == False:
+            self.getLabels()
+        else:
+            self.getGround()
+
+    def OSWalk(self):
+        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location + 'seq/')
+             for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif", ".tiff"))]
+        self.imageLocs = images
+
+
+        # for i in range(len(images)):
+        #    a,b = images[i].split('\\')
+        #    self.imageLocs[i] = a + '/' + b
+
+        if self.flag==False:
+            for i in range(len(images)):
+                a,b = images[i].split('/')
+                self.imageLocs[i] = a + '/' + b
+        else:
+            for i in range(len(images)):
+                self.imageLocs[i] = images[i]
+
+
         # array to store which image has been used
         self.numImages = len(self.imageLocs)
         self.remImages = np.ones((self.numImages), dtype = bool)
-
 
 
     def generateData(self, num):
@@ -80,12 +114,11 @@ class Process:
                 ctr += 1
 
         # array to store which sample has been used
-        self.numSamples = 128*num
+        self.numSamples = self.genNum*num
         self.remSamples = np.ones((self.numSamples), dtype = bool)
 
         # generate samples
         self.process(num, indices)
-
 
 
     def process(self, num, indices):
@@ -108,6 +141,71 @@ class Process:
             idx += 128
 
 
+    def centeredCrop(self, img, output_side_length):
+        height, width, depth = img.shape
+        new_height = output_side_length
+        new_width = output_side_length
+        if height > width:
+            new_height = output_side_length * height / width
+        else:
+            new_width = output_side_length * width / height
+            height_offset = (new_height - output_side_length) / 2
+            width_offset = (new_width - output_side_length) / 2
+            cropped_img = img[height_offset:height_offset + output_side_length,
+                              width_offset:width_offset + output_side_length]
+        return cropped_img
+
+
+    def process(self, num, indices):
+        print('Generating Samples .... Note: no img normalization ')
+        self.sampleImages = np.zeros((num*self.genNum, self.height, self.width, self.depth), dtype=np.uint8)
+        idx = 0
+        imgs = np.zeros((num,  256, 455, 3))
+        names = ['' for i in range(num)]
+        for i in range(num):
+            # read image
+            img = cv2.resize(cv2.imread(indices[i], 1).astype(float), (455,256), interpolation = cv2.INTER_CUBIC)
+
+            name = self.getName(indices[i])
+            if (name in self.img2labels ):
+                names[i] = name
+                imgs[i,:,:,:] = img
+
+        means = np.mean(imgs, axis=0)
+        imgs = imgs - means
+        
+        #temp_mean = np.mean(img, axis=0)
+        #temp_mean = np.mean(temp_mean, axis=0)
+        #temp_std = np.zeros(self.depth)
+
+        #for i in range(self.depth):
+        #    img[:,:,i] -= temp_mean[i]
+        #    temp_std[i] = np.std(img[:,:,i])
+        #    img[:,:,i] /= temp_std[i]
+                
+        for i in range(num):
+            # rotate image if NCLT
+            img = imgs[i, :,:,:]
+            if self.flag==True:
+                rows, cols, _ = img.shape
+                M = cv2.getRotationMatrix2D((cols/2,rows/2),90,1)
+                img = cv2.warpAffine(img,M,(cols,rows))
+
+            # generate 128 random indices for crop
+            for j in range(idx, idx + self.genNum):
+                x = randint(0,31)
+                y = randint(0,230)
+
+                self.sampleImages[j, :, :, :] = img[x:x + self.height, y:y + self.width, :].copy()
+                try:
+                    self.idx2img[j] = names[i]
+                except IndexError:
+                    pdb.set_trace()
+            idx += self.genNum
+
+        for i in range(self.numImages):
+            if self.remImages[i] == False:
+                self.store(self.imageLocs[i])
 
     def fetch(self, num):
         samples = np.zeros((num, self.height, self.width, self.depth), dtype=np.float)
@@ -141,6 +239,13 @@ class Process:
                     # assign sample and labels
                     samples[ctr,:,:,:] = temp
                     labels[ctr] = self.img2labels[self.idx2img[idx]]
+                    if self.idx2img[idx] in self.img2labels.keys():
+                        labels[ctr] = self.img2labels[self.idx2img[idx]]
+                    else:
+                        labels[ctr] = self.img2labels[self.idx2img[idx]+1]
+
+                    samples[ctr,:,:,:] = self.sampleImages[idx, :, :, :].astype(float)
+                    # gaussian normalization of image to have mean 0, variance 1
                     ctr += 1
 
         return [flag, samples, labels]
@@ -173,26 +278,90 @@ class Process:
                 return loc[i+1:]
 
 
+    def getGround(self):
+        filename = self.location + self.file
+        odom = np.loadtxt(filename, delimiter = ",")
+        length, _ = odom.shape
+
+        # the number we have to divide by to get a correct association
+        param = 4
+
+        for i in range(length):
+            name = int(odom[i, 0].item()/10**param)
+
+            x = float(odom[i, 1])
+            y = float(odom[i, 2])
+            z = float(odom[i, 3])
+            r = float(odom[i, 4])
+            p = float(odom[i, 5])
+            h = float(odom[i, 6])
+            data = [x,y,z,r,p,h]
+            self.img2labels[name] = data
+
+
+    def getName(self, loc):
+        if self.flag == False:
+            ctr = 0
+            for i in range(len(loc)):
+                if loc[i]=='/':
+                    ctr += 1
+                if ctr==2:
+                    return loc[i+1:]
+        else:
+            params = loc.split('/')
+            name = params[-1][:-9]
+            return int(name)
+
+
+    def store(self, image):
+        name = self.getName(image)
+        location = self.location + 'usedImages/'
+        # copy image to folder
+        if  os.path.exists(location):
+            shutil.rmtree(location)
+        if not  os.path.exists(location):
+            os.makedirs(location)
+        shutil.copy(image, location +  str(name) + '.tiff')
+
+        # write image with labels to folder
+        file = location + 'trainingSet.csv'
+        csv = open(file, "a")
+
+        if name in self.img2labels.keys():
+            x = str(self.img2labels[name][0])
+            y = str(self.img2labels[name][1])
+            z = str(self.img2labels[name][2])
+            r = str(self.img2labels[name][3])
+            p = str(self.img2labels[name][4])
+            h = str(self.img2labels[name][5])
+        else:
+            name += 1
+            x = str(self.img2labels[name][0])
+            y = str(self.img2labels[name][1])
+            z = str(self.img2labels[name][2])
+            r = str(self.img2labels[name][3])
+            p = str(self.img2labels[name][4])
+            h = str(self.img2labels[name][5])
+
+        row = str(name) + ',' + x + ',' + y + ',' + z + ',' + r + ',' + p + ',' + h + '\n'
+        csv.write(row)
 
     def reset(self):
         self.remImages = np.ones((self.numImages), dtype = bool)
 
 
-
     def numimages(self):
         print('The total number of images are: ', self.numImages)
-
-
+        return self.numImages
 
     def numsamples(self):
         print('The total number of samples are: ', self.numSamples)
 
 
-
     def remsamples(self):
         print('The number of samples that remain are: ',np.sum(self.remSamples))
-
-
+        return self.remSamples
 
     def remimages(self):
         print('The number of images that remain are: ',np.sum(self.remImages))
+        return self.remImages

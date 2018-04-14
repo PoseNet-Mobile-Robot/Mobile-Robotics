@@ -9,12 +9,18 @@ class readImage():
     '''
 
     def __init__(self,pathImage):
-        imagesLocs = [os.path.join(root, name) for root, dirs, files in os.walk(pathImage)
-                  for name in files if name.endswith((".png",".jpg",".jpeg",".gif"))]
+
+        images = list()
+        tail_str = '.tiff'
+        for name in sorted(os.listdir(pathImage)):
+            if name[-len(tail_str):] != tail_str:
+                continue
+            images.append(pathImage+name)
+
         self.imageLocs = images
 
-        data = nploadtxt(os.join(pathImage,'timestamp.txt'),delimiter = ",")
-        self.timestamp = data[:,0]
+        data = np.loadtxt(os.path.join(pathImage,'dataset_test.csv'),delimiter = ",")
+        self.timestamp = data[:,0].astype(int)
         self.groundTruth = data[:,1:]
         self.currKey = 0
         
@@ -24,14 +30,17 @@ class readImage():
         if isPlot:
             cv2.imshow('image{0}'.format(imageId),image)
 
-        timestamp = self.timestamp[self.currKey]
-        groundTruth = self.groundTruth[self.currKey,:]
+        timestamp = self.timestamp[imageId]
+        groundTruth = self.groundTruth[imageId,:]
         self.currKey += 1
         
         return image, timestamp, [groundTruth[0],groundTruth[1],groundTruth[5]]
 
     def getStartId(self):
         return self.timestamp[0]
+
+    def getEndId(self):
+        return self.timestamp[-1]
 
     def length(self):
         return len(self.timestamp)
