@@ -4,8 +4,14 @@ import cv2, os, sys
 import numpy as np
 import random
 batch_size = 32
-directory = './nclt_new/'
+# shop facade
+directory = './ShopFacade/'
 dataset = 'dataset_train.txt'
+
+# King's College
+#directory = './KingsCollege/'
+#dataset = 'dataset_train.txt'
+
 
 class datasource(object):
 	def __init__(self, images, poses):
