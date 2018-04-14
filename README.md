@@ -12,6 +12,16 @@ Application of PoseNet and dynamic structural data generation for real-time loca
 1. Install IP WebCam on your phone
 2. Replace variable "url" in VoIP.py with hosted video url
 
+# GTSAM with Posenet Factor
+This is the GTSAM iSAM2 solver equipped with Posenet as
+a sensor model and odometry get from wheel encoder as an
+action model.
+
+## Attributes
+1. add an odometry by calling solver.step(odometry, odometryNoise)
+2. add a measurement by calling solver.addObs(measurement, measurementNoise)
+3. update the graph and return the current estimate by calling solver.update()
+
 ## References
 1. [PoseNet](https://www.cv-foundation.org/openaccess/content_iccv_2015/papers/Kendall_PoseNet_A_Convolutional_ICCV_2015_paper.pdf)
 2. [Structural Data Generation](http://ccwu.me/vsfm/vsfm.pdf)

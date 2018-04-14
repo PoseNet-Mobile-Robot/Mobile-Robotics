@@ -2,6 +2,7 @@ import cv2, sys, os, shutil, csv
 from random import randint, sample
 import numpy as np
 import pdb
+
 class Process:
     '''
     functions:
@@ -20,6 +21,11 @@ class Process:
     remsamples() = prints total number of samples that remain from the selected lot of images
     '''
 
+
+    def __init__(self, location, height = 224, width = 224, depth = 3):
+        self.img2labels = dict()
+        self.idx2img = dict()
+        
     def __init__(self, location, file = None, flag = False, height = 224, width = 224, depth = 3):
         self.img2labels = dict()
         self.idx2img = dict()
@@ -44,6 +50,18 @@ class Process:
         self.OSWalk()
         # print number of images
         self.numimages()
+        # populate labels dict
+        self.getLabels()
+
+
+    def OSWalk(self):
+        images = [os.path.join(root, name) for root, dirs, files in os.walk(self.location)
+             for name in files if name.endswith((".png", ".jpg", ".jpeg", ".gif"))]
+        self.imageLocs = images
+
+        for i in range(len(images)):
+            a,b = images[i].split('\\')
+            self.imageLocs[i] = a + '/' + b
 
         # populate labels dict
         # False implies Cambridge Dataset, True is NCLT
@@ -75,6 +93,7 @@ class Process:
         self.numImages = len(self.imageLocs)
         self.remImages = np.ones((self.numImages), dtype = bool)
 
+
     def generateData(self, num):
         ctr = 0
         indices = ['']*num
@@ -84,7 +103,7 @@ class Process:
         if rem < num:
             print('Number of Images left to select: ', rem)
             print('Generating samples for the remaining images')
-        pdb.set_trace()
+
         num = min(rem, num) # only activated when the number of images left is less than the request
 
         while ctr<num:
@@ -100,6 +119,27 @@ class Process:
 
         # generate samples
         self.process(num, indices)
+
+
+    def process(self, num, indices):
+        print('Generating Samples .... ')
+
+        self.sampleImages = np.zeros((num*128, self.height, self.width, self.depth), dtype=np.uint8)
+
+        idx = 0
+        for i in range(num):
+            # read image
+            img = cv2.resize(cv2.imread(indices[i], 1), (455,256), interpolation = cv2.INTER_CUBIC)
+            name = self.getName(indices[i])
+
+            # generate 128 random indices for crop
+            for j in range(idx, idx+128):
+                x = randint(0,31)
+                y = randint(0,230)
+                self.sampleImages[j, :, :, :] = img[x:x + self.height, y:y + self.width, :].copy()
+                self.idx2img[j] = name
+            idx += 128
+
 
     def centeredCrop(self, img, output_side_length):
         height, width, depth = img.shape
@@ -185,6 +225,20 @@ class Process:
                 if self.remSamples[idx]==True:
                     self.remSamples[idx] = False
 
+                    # gaussian normalization of image to have mean 0, variance 1
+                    temp = self.sampleImages[idx, :, :, :].astype(float)
+                    temp_mean = np.mean(temp, axis=0)
+                    temp_mean = np.mean(temp_mean, axis=0)
+                    temp_std = np.zeros(self.depth)
+
+                    for i in range(self.depth):
+                        temp[:,:,i] -= temp_mean[i]
+                        temp_std[i] = np.std(temp[:,:,i])
+                        temp[:,:,i] /= temp_std[i]
+
+                    # assign sample and labels
+                    samples[ctr,:,:,:] = temp
+                    labels[ctr] = self.img2labels[self.idx2img[idx]]
                     if self.idx2img[idx] in self.img2labels.keys():
                         labels[ctr] = self.img2labels[self.idx2img[idx]]
                     else:
@@ -208,11 +262,20 @@ class Process:
         lines.extend(lines2)
         numLines = len(lines)
 
-        # we assume that the dataset_train.txt has no redundant texts at the beginning
         for i in range(numLines):
             line = lines[i].strip()
             line = line.split()
             self.img2labels[line[0]] = list(map(float,line[1:8]))
+
+
+
+    def getName(self, loc):
+        ctr = 0
+        for i in range(len(loc)):
+            if loc[i]=='/':
+                ctr += 1
+            if ctr==2:
+                return loc[i+1:]
 
 
     def getGround(self):
@@ -291,10 +354,9 @@ class Process:
         print('The total number of images are: ', self.numImages)
         return self.numImages
 
-
     def numsamples(self):
         print('The total number of samples are: ', self.numSamples)
-        return self.numSamples
+
 
     def remsamples(self):
         print('The number of samples that remain are: ',np.sum(self.remSamples))

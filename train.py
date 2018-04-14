@@ -8,7 +8,7 @@ import tensorflow as tf
 from tqdm import tqdm
 import cv2, imutils
 import vgg
-import gen_data_nclt as gen_data
+import gen_data_cam as gen_data
 import pdb
 
 def delete_network_backups(filename_prefix):
@@ -29,7 +29,7 @@ def delete_network_backups(filename_prefix):
 
 class trainer():
     
-    def __init__(self,path_to_weight, path_to_data, beta, use_quaternion=True, resume_training=False):
+    def __init__(self,path_to_weight, path_to_data, beta, use_quaternion=True, resume_training=False, just_test=False):
         self.network_input_size = 224
         self.output_dim = 7 if use_quaternion else 6
         self.sess = tf.Session(config=tf.ConfigProto(log_device_placement=True))
@@ -46,12 +46,14 @@ class trainer():
             
         self.merged_summary = tf.summary.merge_all()
         now = datetime.now()
+        self.summary_now = now.strftime("%Y%m%d-%H%M%S")
         #self.train_writer = tf.summary.FileWriter('./summary/train/', self.sess.graph)
-        self.train_writer = tf.summary.FileWriter('./summary/train'+ now.strftime("%Y%m%d-%H%M%S") + "/", self.sess.graph)
+        self.train_writer = tf.summary.FileWriter('./summary/train'+ self.summary_now  + "/", self.sess.graph)
         self.test_writer = tf.summary.FileWriter( './summary/test'+ now.strftime("%Y%m%d-%H%M%S") + "/") 
 
-        # initialize 
-        self.init_data_handler(path_to_data)        
+        # initialize
+        if just_test == False:
+            self.init_data_handler(path_to_data)        
         self.init_op = tf.global_variables_initializer() # tf.variables_initializer(self.init_vars )
 
         if not resume_training:
@@ -131,6 +133,7 @@ class trainer():
         self.network.variable_summaries(self.loss, "final_weighted_loss_")
 
     def test(self, img, need_rotate_angle=270, num_random_crops=20):
+        pdb.set_trace()
         if img.shape[2] != 3:
             print ("We only accept 3-dimensional rgb images")
         if img.shape[0] > img.shape[1]:
@@ -150,7 +153,7 @@ class trainer():
             return np.mean(t_r_output, axis=0)
         else:
             tf_output = self.sess.run([self.regression_out],
-                                      feed_dict={self.image_inputs: gen_data_nclt.centeredCrop(img, input_size)} )
+                                      feed_dict={self.image_inputs: gen_data.centeredCrop(img, input_size)} )
             return tf_output
 
     
@@ -189,8 +192,8 @@ class trainer():
                 self.train_writer.add_summary(summary, epoch * total_batch + i)
 
             avg_loss = (total_loss)/total_batch
-            self.saver.save(self.sess, "./model_epoch_"+str(epoch)+".ckpt")
-            if epoch > 0: delete_network_backups("./model_epoch_"+str(epoch-1)+".ckpt" )
+            self.saver.save(self.sess, "./"+self.summary_now+"model_epoch_"+str(epoch)+".ckpt")
+            if epoch > 0: delete_network_backups("./"+self.summary_now+"model_epoch_"+str(epoch-1)+".ckpt" )
             print("[trainer] Epoch " + str(epoch )+ " ends, avg loss =" + "{:.3f}".format(avg_loss))
 
             total_loss = 0
@@ -203,8 +206,9 @@ if __name__ == "__main__":
         argv[1] = './vgg.data'
         argv[2] = './ShopFacade/'
         argv[3] = 100
-        argv[4] = False
+        argv[4] = True
         argv[5] = bool(int(False))
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    train_thread = trainer(argv[1], argv[2], int(argv[3]), use_quaternion=argv[4], resume_training=False )
-    train_thread.train(32, 600)
+    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    train_thread1 = trainer(argv[1], argv[2], 100, use_quaternion=argv[4], resume_training=False )
+    train_thread1.train(32, 10)
