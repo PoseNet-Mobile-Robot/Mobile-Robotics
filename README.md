@@ -7,6 +7,7 @@ Application of PoseNet and dynamic structural data generation for real-time loca
 3. OpenCV 3
 4. TensorFlow
 5. MatPlotlib/ NumPy/ urllib2
+6. [GTSAM 4.0](https://bitbucket.org/gtborg/gtsam/) with Python 2.7 enabled
 
 ## Procedure
 1. Install IP WebCam on your phone
