@@ -102,17 +102,11 @@ class PoseNetiSam(object):
                             self.currentEst.atPose2(X(self.currentKey)).theta()]
         return self.currentPose
 
-#    def currentPos(self, key=0):
-#        if key == 0:
-#            key = self.currentKey
-
-#        if(self.currentEst):
-#            currentPos = [self.currentEst.atPose2(X(key)).x(),
-#                          self.currentEst.atPose2(X(key)).y(),
-#                          self.currentEst.atPose2(X(key)).theta()]
-#        else:
-#            currentPos = [0,0,0]
-#        return currentPos
+    def getEstimate(self,id):
+        return [self.currentEst.atPose2(X(id)).x(),
+                self.currentEst.atPose2(X(id)).y(),
+                self.currentEst.atPose2(X(id)).theta()]
+       
 
     def printGraph(self, output = "\nFactor Graph:\n"):
         print(self.graph)

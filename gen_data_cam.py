@@ -4,16 +4,18 @@ import cv2, os, sys
 import numpy as np
 import random, imutils
 batch_size = 32
-# test directory
-# directory = '/home/eecs568/Documents/TestImages/'
-# dataset = 'testSet.csv'
-
 # train directory
-directory = './cam4_train/'
-dataset = 'dataset_train.csv'
+#directory = './nclt_tripple/'
+#dataset = 'dataset_train.csv'
+
+# test directory
+directory = './nclt_03_31/test/'
+dataset = 'dataset_test.csv'
 
 class datasource(object):
     def __init__(self, images, poses):
+        print("Image Data path: "+directory)
+        print("label path: "+dataset)
         self.images = images
         self.poses = poses
 
@@ -80,8 +82,10 @@ def get_data():
             p3 = float(p3)
             p4 = float(p4)
             p5 = float(p5)
-            
-            filename = directory+'/'+all_imgs[line_num] #fname+".tiff"
+            try:
+                filename = directory+'/'+all_imgs[line_num] #fname+".tiff"
+            except:
+                pdb.set_trace()
             if (os.path.isfile(filename)==False):
                 pdb.set_trace()
                 continue

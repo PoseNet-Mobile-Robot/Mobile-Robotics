@@ -101,8 +101,10 @@ class trainer():
     def restore_network(self, path_to_weight):
         self.saver = tf.train.import_meta_graph(path_to_weight + ".meta" )
         graph = tf.get_default_graph()
+
         self.regression_out = tf.get_default_graph().get_tensor_by_name('fc9/fc9:0')
-        self.loss = graph.get_operation_by_name("final_loss")
+        self.loss = graph.get_tensor_by_name("add:0")
+        
         self.train_op = tf.get_default_graph().get_operation_by_name("Adam_minimizer")
         self.saver.restore(self.sess, path_to_weight)#tf.train.latest_checkpoint('./'))
         self.image_inputs = tf.get_default_graph().get_tensor_by_name('Placeholder:0')
@@ -133,7 +135,6 @@ class trainer():
         self.network.variable_summaries(self.loss, "final_weighted_loss_")
 
     def test(self, img, need_rotate_angle=270, num_random_crops=20):
-        pdb.set_trace()
         if img.shape[2] != 3:
             print ("We only accept 3-dimensional rgb images")
         if img.shape[0] > img.shape[1]:
@@ -161,11 +162,12 @@ class trainer():
     def train(self, batch_size, epochs):
         
         total_loss = 0
-        total_batch = 281 #int(self.data_handler.numimages() * self.data_handler.genNum * 1.0 / batch_size) #100
+        total_batch = 125 #int(self.data_handler.numimages() * self.data_handler.genNum * 1.0 / batch_size) #100
         if total_batch==0:
             pdb.set_trace()
         #print("[trainer] Start Training, size of dataset is " +str(self.data_handler.numimages() * self.data_handler.num_crops ))
         #pdb.set_trace()
+        min_loss = 100000000000.0
         for epoch in range(epochs):
             #self.data_handler.reset()
             #self.data_handler.generateData(500)
@@ -185,15 +187,19 @@ class trainer():
                 one_batch_image, np_poses_x, np_poses_q = next(data_gen)
                 one_batch_label = np.hstack((np_poses_x, np_poses_q))
                 feeds ={self.image_inputs: one_batch_image, self.label_inputs: one_batch_label }
-                summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], feed_dict=feeds) 
-                self.sess.run([self.train_op], feed_dict=feeds )
+                #summary, loss, gradients = self.sess.run([self.merged_summary, self.loss, self.compute_gradients ], feed_dict=feeds)
+
+                summary, loss, _= self.sess.run([self.merged_summary, self.loss, self.train_op ], feed_dict=feeds) 
+                #self.sess.run([self.train_op], feed_dict=feeds )
                 print("[Epoch "+str(epoch)+" trainer] Train one batch of size "+str(batch_size)+", loss is "+str(loss))
                 total_loss += loss
                 self.train_writer.add_summary(summary, epoch * total_batch + i)
 
             avg_loss = (total_loss)/total_batch
-            self.saver.save(self.sess, "./"+self.summary_now+"model_epoch_"+str(epoch)+".ckpt")
-            if epoch > 0: delete_network_backups("./"+self.summary_now+"model_epoch_"+str(epoch-1)+".ckpt" )
+            if avg_loss < min_loss:
+                min_loss = avg_loss
+                self.saver.save(self.sess, "./"+self.summary_now+"model_epoch_"+str(epoch)+".ckpt")
+            #if epoch > 0: delete_network_backups("./"+self.summary_now+"model_epoch_"+str(epoch-1)+".ckpt" )
             print("[trainer] Epoch " + str(epoch )+ " ends, avg loss =" + "{:.3f}".format(avg_loss))
 
             total_loss = 0
@@ -209,6 +215,6 @@ if __name__ == "__main__":
         argv[4] = True
         argv[5] = bool(int(False))
     os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-    os.environ['CUDA_VISIBLE_DEVICES'] = '1'
+    #os.environ['CUDA_VISIBLE_DEVICES'] = '1'
     train_thread1 = trainer(argv[1], argv[2], 100, use_quaternion=argv[4], resume_training=False )
     train_thread1.train(32, 10)
